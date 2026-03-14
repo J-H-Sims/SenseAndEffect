@@ -18,7 +18,7 @@ SPEED_OF_LIGHT = 299792458
 bandwidth = 10
 polarity_filter = 1
 
-min_photons_to_detect =1
+min_photons_to_detect =20
 
 min_SNR = 0.3
 
@@ -27,7 +27,8 @@ min_SNR = 0.3
 #    divergence_rad = divergence_in_degrees *np.pi/180
 #    print(divergence_rad)
 #    return divergence_rad
-
+def diffraction_limited_divergence_deg(M2, wavelength, waist):
+    return np.degrees(M2*2*wavelength/(np.pi*(waist/2)))
 
 def compute_photons_p_pulse(range_m, pulse_energy_J,divergence_rad):
 
@@ -80,22 +81,23 @@ def compute_SNR(range_m,pulse_energy_J,divergence_rad):
     SNR = (photons_per_pulse / solar_photons_per_pulse)
 
     if photons_per_pulse<min_photons_to_detect:
-        print("below threshold")
+       # print("below threshold")
         SNR = 0
 
     #print(f"SNR:           {SNR* 100:.2f} %")
     #print(f"ppp:           {photons_per_pulse:.5f}")
     return SNR
 
-# def compute_range(pulse_energy_J,divergence_rad):
-#     range = 1000
-#     SNR = compute_SNR(range,pulse_energy_J,divergence_rad)
-#
-#     dr = 100
-#     while SNR>min_SNR:
-#         range = range + dr
-#         SNR = compute_SNR(range, pulse_energy_J,divergence_rad)
-#     return range
+def compute_range(pulse_energy_J,divergence_rad):
+    range = 1000
+    SNR = compute_SNR(range,pulse_energy_J,divergence_rad)
+
+    dr = 100
+    while SNR>min_SNR:
+        range = range + dr
+        SNR = compute_SNR(range, pulse_energy_J,divergence_rad)
+
+    return range
 
 #print(compute_range(39e-6))
 
@@ -104,15 +106,18 @@ def compute_pulse_energy(range,divergence_rad):
     #print("SNR")
     SNR = compute_SNR(range,pulse_energy_J,divergence_rad)
     #print(SNR)
+    #print(pulse_energy_J)
     while SNR>min_SNR:
         dE = pulse_energy_J*0.005
         pulse_energy_J = pulse_energy_J - dE
         SNR = compute_SNR(range, pulse_energy_J,divergence_rad)
+       # print(SNR)
+       # print(pulse_energy_J)
     return pulse_energy_J
 
-#compute_pulse_energy(10000, np.radians(45))
+#print(compute_pulse_energy(800000, np.radians(1)))
 
-
+print(compute_range(900e-6, 7e-3))
 
 # import matplotlib.pyplot as plt
 # # Inputs

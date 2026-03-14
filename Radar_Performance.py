@@ -3,8 +3,16 @@ import sympy as sp
 #_______
 ##Radar
 #_______
-def Gain_Approx(Beamwidth):
-    Gain = 4*np.pi/(2*np.pi*(1-np.cos(np.radians(Beamwidth/2))))
+def Gain_Approx(Beamwidth, lamda_radar,aperture_diameter):
+    Beamwidth = np.radians(Beamwidth)
+    if lamda_radar != 0 or aperture_diameter !=0 :
+        theoretical_min_beamwidth = 1.22*lamda_radar/aperture_diameter
+       # print(theoretical_min_beamwidth, Beamwidth)
+        if theoretical_min_beamwidth>Beamwidth:
+            Beamwidth = theoretical_min_beamwidth
+
+    Gain = 4 * np.pi / (2 * np.pi * (1 - np.cos(Beamwidth / 2)))
+
     return Gain
 
 # Radar symbols
