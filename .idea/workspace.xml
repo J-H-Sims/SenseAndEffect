@@ -5,10 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e47d2d8b-c5e4-4d05-a2f3-c64ddb5621d2" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/CuboidLiDARModel.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GaussianBeam.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/LaserScatter.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/LiDAR_Sim.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SurfaceParameterFitting.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/LiDAR_Performance.py" beforeDir="false" afterPath="$PROJECT_DIR$/LiDAR_Performance.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Multimodal Ranges.py" beforeDir="false" afterPath="$PROJECT_DIR$/Multimodal Ranges.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Radar_Performance.py" beforeDir="false" afterPath="$PROJECT_DIR$/Radar_Performance.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -51,11 +54,16 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.CuboidLiDARModel.executor": "Run",
+    "Python.GaussianBeam.executor": "Run",
+    "Python.LaserScatter.executor": "Run",
     "Python.LiDAR.executor": "Run",
     "Python.LiDAR_Performance.executor": "Run",
+    "Python.LiDAR_Sim.executor": "Run",
     "Python.Multimodal Ranges.executor": "Run",
     "Python.Radar_Performance.executor": "Run",
     "Python.RangePrecisionFromCamera.executor": "Run",
+    "Python.SurfaceParameterFitting.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
@@ -113,7 +121,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/LiDAR_Performance.py</url>
-          <line>25</line>
+          <line>26</line>
           <option name="timeStamp" value="1" />
         </line-breakpoint>
       </breakpoints>
