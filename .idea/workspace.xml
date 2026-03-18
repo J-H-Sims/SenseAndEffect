@@ -5,10 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e47d2d8b-c5e4-4d05-a2f3-c64ddb5621d2" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/CuboidSolarModel.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CuboidLiDARModel.py" beforeDir="false" afterPath="$PROJECT_DIR$/CuboidLiDARModel.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GaussianBeam.py" beforeDir="false" afterPath="$PROJECT_DIR$/GaussianBeam.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/LiDAR_Performance.py" beforeDir="false" afterPath="$PROJECT_DIR$/LiDAR_Performance.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
