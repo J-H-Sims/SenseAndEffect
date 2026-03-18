@@ -16,27 +16,28 @@ def gaussian_beam_radius(z, w0, wavelength, theta_user=0.0):
         w0  : beam waist radius (1/e^2 of peak)
     """
     # Diffraction-limited divergence
-    theta_diff = wavelength / (np.pi * w0)
+    theta_diff = wavelength *(10**-9) / (np.pi * w0)
+    #print(f"theta diff: {theta_diff}")
     theta_eff = max(theta_diff, theta_user)
 
     # Beam radius at distance z
     w_z = w0 + z * np.tan(theta_eff / 2)
 
-    return w_z, w0
+    return w_z
 
 def gaussian_beam_wm2(x, y, z, w0, wavelength, P_total, theta_user=0.0):
     """
     Gaussian beam in W/m².
     """
-    theta_diff = wavelength / (np.pi * w0)
+    theta_diff = wavelength*(10**-9)  / (np.pi * w0)
     theta_eff = max(theta_diff, theta_user)
     w_z = w0 + z * np.tan(theta_eff / 2)
     r2 = x**2 + y**2
     I = (2 * P_total / (np.pi * w_z**2)) * np.exp(-2 * r2 / w_z**2)
 
-    spot_diameter = gaussian_beam_radius(z, w0, wavelength, theta_user)
+    spot_radius = gaussian_beam_radius(z, w0, wavelength, theta_user)
 
-    return I, spot_diameter
+    return I, spot_radius
 #
 # # -----------------------------
 # # Example usage

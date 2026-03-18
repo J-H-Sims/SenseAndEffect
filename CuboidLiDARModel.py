@@ -1,5 +1,9 @@
+#CuboidLiDARModel.py
+
 import json
 import numpy as np
+
+#from LiDAR import target_area_m2
 
 # Load material parameters
 with open("lidar_params.json", "r") as f:
@@ -51,6 +55,7 @@ def lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
     ])
 
     total_return = 0.0
+    target_area = 0
     for n, mat, A_face in zip(normals_rot, face_materials, face_areas):
         cos_theta = np.dot(n, obs_dir)
         if cos_theta <= 0:
@@ -58,29 +63,32 @@ def lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
         kd, kr, beta = material_params[mat]
         r_frac = kd * cos_theta + kr * cos_theta ** beta
         total_return += r_frac * A_face * cos_theta  # projected area included
-    return total_return
+        target_area += A_face* cos_theta
+
+    return total_return , target_area
 
 # -----------------------------
 # Example usage
 # -----------------------------
+if __name__ == "__main__":
+    # Cuboid size (meters)
+    length, width, height = 2.0, 2.0, 2
 
-# Cuboid size (meters)
-length, width, height = 2.0, 2.0, 2
+    # Orientation in radians
+    roll = np.deg2rad(90)
+    pitch = np.deg2rad(0)
+    yaw = np.deg2rad(0)
 
-# Orientation in radians
-roll = np.deg2rad(90)
-pitch = np.deg2rad(0)
-yaw = np.deg2rad(0)
+    # Materials per face: +X, -X, +Y, -Y, +Z, -Z
+    face_materials = [
+        "Brushed V Al",
+        "Brushed V Al",
+        "Brushed V Al",
+        "Brushed V Al",
+        "Brushed V Al",
+        "Brushed V Al"
+    ]
 
-# Materials per face: +X, -X, +Y, -Y, +Z, -Z
-face_materials = [
-    "Brushed V Al",
-    "Brushed V Al",
-    "Brushed V Al",
-    "Brushed V Al",
-    "Brushed V Al",
-    "Brushed V Al"
-]
+    total_power,target_area = lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
+    print(f"Total LiDAR return for cuboid: {total_power:.6f}  J/J")
 
-total_power = lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
-print(f"Total LiDAR return for cuboid: {total_power:.6f}  J/J")

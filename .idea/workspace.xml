@@ -5,12 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e47d2d8b-c5e4-4d05-a2f3-c64ddb5621d2" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/CuboidLiDARModel.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/GaussianBeam.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/LaserScatter.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/LiDAR_Sim.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/SurfaceParameterFitting.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/CuboidSolarModel.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CuboidLiDARModel.py" beforeDir="false" afterPath="$PROJECT_DIR$/CuboidLiDARModel.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/GaussianBeam.py" beforeDir="false" afterPath="$PROJECT_DIR$/GaussianBeam.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/LiDAR_Performance.py" beforeDir="false" afterPath="$PROJECT_DIR$/LiDAR_Performance.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -55,6 +53,7 @@
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "Python.CuboidLiDARModel.executor": "Run",
+    "Python.CuboidSolarModel.executor": "Run",
     "Python.GaussianBeam.executor": "Run",
     "Python.LaserScatter.executor": "Run",
     "Python.LiDAR.executor": "Run",
@@ -115,16 +114,5 @@
       <updated>1770984069283</updated>
     </task>
     <servers />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/LiDAR_Performance.py</url>
-          <line>26</line>
-          <option name="timeStamp" value="1" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
   </component>
 </project>
