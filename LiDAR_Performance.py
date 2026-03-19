@@ -107,13 +107,13 @@ def compute_solar_photons(range_m, length=length1, width=width1, height=height1,
 
         direct_solar_photons = (0.4 * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * pulse_width_s
         solar_photons =solar_photons+ direct_solar_photons
-        print("direct glare")
+        #print("direct glare")
     elif abs(angle_zx) > FoV :
         #print("sun glare at" , direct_solar_photons)
         x = (np.radians(0.265))/(np.pi -abs( angle_zx))
         direct_solar_photons = (x)*(0.4 * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * pulse_width_s
         solar_photons = solar_photons + direct_solar_photons
-        print("zx glare",x)
+        #print("zx glare",x)
     elif abs(angle_zy) > FoV:
         x = (np.radians(0.265)) / (np.pi - abs(angle_zy))
         #print("sun glare at" , direct_solar_photons)
@@ -196,13 +196,15 @@ def relative_angles(view_dir, illum_dir):
     angle_xy = np.arctan2(illum_dir[1], illum_dir[0]) - np.arctan2(view_dir[1], view_dir[0])
     return angle_zx, angle_zy, angle_xy
 
+
 def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
     results = []
-
+    n = 0
     I, w = Gbeam.gaussian_beam_wm2(0, 0, max_range, beam_waist, wavelength_nm, 1, theta_user1)
 
 
     for _ in range(n_samples):
+        n += 1
         roll = np.random.uniform(-np.pi, np.pi)
         pitch = np.random.uniform(-np.pi, np.pi)
 
@@ -243,6 +245,10 @@ def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
             "SNR": SNR
         })
 
+        percentage = 100 * n / n_samples
+        if percentage % 1 == 0:
+            print(f"Progress: {int(percentage)}%")
+
     return results
 
 import matplotlib.pyplot as plt
@@ -253,7 +259,7 @@ from scipy.special import expit
 
 # --- Run simulation ---
 max_range = compute_range(pulse_energy_J)
-results = monte_carlo_SNR(2 * max_range, pulse_energy_J, 100000)
+results = monte_carlo_SNR(2 * max_range, pulse_energy_J, 1000000)
 
 above = [r for r in results if r["SNR"] >  0.3]
 below = [r for r in results if r["SNR"] <= 0.3]
@@ -294,22 +300,42 @@ for i in range(n_bins):
     ranges     = np.array([d[0] for d in bin_data])
     detections = np.array([d[1] for d in bin_data])
 
-    if detections.sum() == 0 or detections.sum() == len(detections):
-        continue
+    positive_detections = 0
+    negative_detections = 0
 
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", OptimizeWarning)
-            popt, _ = curve_fit(sigmoid, ranges, detections,
-                                p0=[np.median(ranges), 0.001],
-                                maxfev=5000)
-        r50, k = popt
-        if k > 0:
-            r90 = r50 - np.log(0.5 / 0.1) / k
-            if r90 > 0:
-                bin_range_90[i] = r90
-    except RuntimeError:
-        continue
+    for j in range(len(bin_data)):
+        r, detection = bin_data[j]
+        if detection == 1:
+            positive_detections += 1
+        elif detection == 0:
+            negative_detections += 1
+
+        total = positive_detections + negative_detections
+        if total > 0 and positive_detections / total < 0.99:
+            bin_range_90[i] = r
+            break
+
+
+
+
+
+    #
+    # if detections.sum() == 0 or detections.sum() == len(detections):
+    #     continue
+    #
+    # try:
+    #     with warnings.catch_warnings():
+    #         warnings.simplefilter("ignore", OptimizeWarning)
+    #         popt, _ = curve_fit(sigmoid, ranges, detections,
+    #                             p0=[np.median(ranges), 0.001],
+    #                             maxfev=5000)
+    #     r50, k = popt
+    #     if k > 0:
+    #         r90 = r50 - np.log(0.9 / 0.1) / k
+    #         if r90 > 0:
+    #             bin_range_90[i] = r90
+    # except RuntimeError:
+    #     continue
 
 # --- Smoothing ---
 def smooth(arr):
