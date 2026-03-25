@@ -2,14 +2,8 @@ import numpy as np
 import CuboidLiDARModel as target
 import GaussianBeam as Gbeam
 import CuboidSolarModel as solar
-
-     # target range (m)
-#divergence_rad = 0.018  # transmit beam divergence (mrad)
-
-
-#target_area_m2 = 1  # area of target component (mm^2)
-#target_reflectance = 0.1  # reflectance of surface (0–1)
-#scatter_scalar = 1  # factor that increases return divergence
+# from IPython import get_ipython
+# get_ipython().run_line_magic('reset', '-f')
 
 aperture_area_m2 = np.pi * (0.015 ** 2)  # receiver aperture area (mm^2)
 
@@ -25,13 +19,6 @@ min_photons_to_detect =20
 
 min_SNR = 0.3
 
-#def set_divergence_degrees(divergence_in_degrees):
-#    global divergence_rad
-#    divergence_rad = divergence_in_degrees *np.pi/180
-#    print(divergence_rad)
-#    return divergence_rad
-# def diffraction_limited_divergence_deg(M2, wavelength, waist):
-#     return np.degrees(M2*2*wavelength/(np.pi*(waist/2)))
 
 length1=1
 width1=1
@@ -52,29 +39,27 @@ beam_waist = 0.001
 
 def compute_photons_p_pulse(X=0, Y=0, z=10000, w0=0.001, wavelength=wavelength_nm, P_total=0.001, theta_user=0,length=length1, width=width1, height=height1, roll=roll1, pitch=pitch1, yaw=yaw1, face_materials = face_materials1):
     I, w = Gbeam.gaussian_beam_wm2(X, Y, z, w0, wavelength, P_total, theta_user)
-    #print(f"I: {I}, w: {w}")
 
     R, target_area_m2 = target.lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
-    #print(f"R: {R}, target_area_m2: {target_area_m2}")
 
     reflected_energy = I * R
-    #print(f"reflected_energy: {reflected_energy}")
+
 
     characteristic_width = (length+width+height)/3
-    #print(f"characteristic_width: {characteristic_width}")
+
 
     received_intensity, return_spot_radius = Gbeam.gaussian_beam_wm2(0, 0, z, characteristic_width, wavelength,
                                                                        reflected_energy, 0.0125)
-    #print(f"received_intensity: {received_intensity}, return_spot_radius: {return_spot_radius}")
+
 
     received_energy = received_intensity * aperture_area_m2
-    #print(f"received_energy: {received_energy}")
+
 
     photon_energy_J = (PLANCK_CONSTANT * SPEED_OF_LIGHT) / (wavelength_nm * 1e-9)
-    #print(f"photon_energy_J: {photon_energy_J}")
+
 
     photons_per_pulse = received_energy / photon_energy_J
-    #print(f"photons_per_pulse: {photons_per_pulse}")
+
     return photons_per_pulse
 
 
@@ -84,10 +69,7 @@ def compute_solar_photons(range_m, length=length1, width=width1, height=height1,
 
 
     solar_reflected_W  = 0.4 * bandwidth * polarity_filter * R
-    #solar_spot_m       = (range_m * np.tan(0.05)) + target_area_m2**0.5
-    #solar_divergence_radian =
-    #solar_divergence_steradian = 2 * np.pi * (1 - np.cos(solar_divergence_radian / 2))
-    #solar_spot_area = solar_divergence_steradian * range_m ** 2 + target_area_m2  # includes approximation to divergence and object area
+
     characteristic_width = (length+width+height)/3
     solar_received_intensity, return_spot_radius = Gbeam.gaussian_beam_wm2(0, 0, range_m, characteristic_width, wavelength_nm,
                                                                        solar_reflected_W, 0)
@@ -95,14 +77,14 @@ def compute_solar_photons(range_m, length=length1, width=width1, height=height1,
 
     solar_collected_W  = solar_received_intensity * aperture_area_m2
     photon_energy_J    = (PLANCK_CONSTANT * SPEED_OF_LIGHT) / (wavelength_nm * 1e-9)
-    #print(solar_collected_W)
+
     solar_photons = (solar_collected_W / photon_energy_J) * pulse_width_s
 
     view_dir = obs_dir
     angle_zx, angle_zy, angle_xy = relative_angles(view_dir, illum_dir)
-    FoV = np.pi - np.radians(10)
+    FoV = np.pi - np.radians(max(theta_user1,10))
     solar_disk_radius = np.pi - np.radians(0.265)
-    #print("tick")
+
     if abs(angle_zx) > solar_disk_radius or abs(angle_zy) > solar_disk_radius:
 
         direct_solar_photons = (0.4 * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * pulse_width_s
@@ -121,72 +103,61 @@ def compute_solar_photons(range_m, length=length1, width=width1, height=height1,
         solar_photons = solar_photons + direct_solar_photons
         #print("zy glare",(np.pi -solar_disk_radius)/abs(np.pi - angle_zy))
 
-    # print(f"R: {R}")
-    # #print(f"target_area_m2: {target_area_m2}")
-    # print(f"solar_reflected_W: {solar_reflected_W}")
-    # print(f"characteristic_width: {characteristic_width}")
-    # print(f"solar_received_intensity: {solar_received_intensity}")
-    # print(f"return_spot_radius: {return_spot_radius}")
-    # print(f"solar_collected_W: {solar_collected_W}")
-    # print(f"photon_energy_J: {photon_energy_J}")
+
     return solar_photons
 
-def compute_SNR(range_m,pulse_energy_J,roll, pitch, yaw,illum_dir,X,Y):
+def compute_SNR(range_m,pulse_energy_J,roll, pitch, yaw,illum_dir,X,Y,theta=theta_user1):
     #print("compute SNR")
     reflected_solar_photons_per_pulse = compute_solar_photons(range_m, length1, width1, height1, roll, pitch, yaw, face_materials1, illum_dir, [0, 0, 1])
-    photons_per_pulse = compute_photons_p_pulse(X, Y, range_m, beam_waist, wavelength_nm, pulse_energy_J, theta_user1,length1, width1, height1, roll, pitch, yaw,  face_materials1)
+    photons_per_pulse = compute_photons_p_pulse(X, Y, range_m, beam_waist, wavelength_nm, pulse_energy_J, theta,length1, width1, height1, roll, pitch, yaw,  face_materials1)
 
 
     SNR = (photons_per_pulse / reflected_solar_photons_per_pulse)
 
 
     if photons_per_pulse<min_photons_to_detect:
-        print("below threshold")
+        #print("below threshold")
         SNR = 0
 
-    #print(f"SNR:           {SNR* 100:.2f} %")
-    #print(f"ppp:           {photons_per_pulse:.5f}")
+
 
     return SNR
 
-def compute_range(pulse_energy_J):
+def compute_range(pulse_energy_J,theta=theta_user1):
     range = 1000
-    SNR = compute_SNR(range,pulse_energy_J,roll1,pitch1,yaw1,[0,0,1],0,0)
+    SNR = compute_SNR(range,pulse_energy_J,roll1,pitch1,yaw1,[0,0,1],0,0,theta)
 
     dr = 100
     while SNR>min_SNR:
         range = range + dr
-        SNR = compute_SNR(range,pulse_energy_J,roll1,pitch1,yaw1,[0,0,1],0,0)
+        SNR = compute_SNR(range,pulse_energy_J,roll1,pitch1,yaw1,[0,0,1],0,0,theta)
 
     return range
 
-#print(compute_range(39e-6))
 
-def compute_pulse_energy(range):
+
+def compute_pulse_energy(range,theta=theta_user1):
     pulse_energy_J = 10000000000000
-    #print("SNR")
-    SNR = compute_SNR(range,pulse_energy_J,roll1,pitch1,yaw1,[0,0,1],0,0)
-    #print(SNR)
-    #print(pulse_energy_J)
+    azimuth = np.pi*3/2
+    elevation = 0
+
+    illum_dir = np.array([
+        0,
+        0,
+        1
+    ])
+    #print(illum_dir)
+    SNR = compute_SNR(range,pulse_energy_J,roll1,pitch1,yaw1,illum_dir,0,0,theta)
+
     while SNR>min_SNR:
         dE = pulse_energy_J*0.005
         pulse_energy_J = pulse_energy_J - dE
-        SNR = compute_SNR(range,pulse_energy_J,roll1,pitch1,yaw1,[0,0,1],0,0)
+        SNR = compute_SNR(range,pulse_energy_J,roll1,pitch1,yaw1,illum_dir,0,0,theta)
        # print(SNR)
        # print(pulse_energy_J)
     return pulse_energy_J
 
-#print(compute_pulse_energy(800000, np.radians(1)))
 
-#print(compute_range(900e-6, 7e-3))
-
-
-#print(compute_photons_p_pulse(z=range, P_total=pulse_energy,theta_user =theta_user))
-#print(compute_solar_photons(range, length1, width1, height1, roll1, pitch1, yaw1, face_materials1, illum_dir, obs_dir))
-#print(compute_SNR(range_m,pulse_energy_J,roll1,pitch1,yaw1,[0,0,1],0,0)*100)
-
-#print("range " , compute_range(pulse_energy))
-#print("pulse energy  " , compute_pulse_energy(10000))
 def relative_angles(view_dir, illum_dir):
     # angle in ZX plane (elevation-like)
     angle_zx = np.arctan2(illum_dir[0], illum_dir[2]) - np.arctan2(view_dir[0], view_dir[2])
@@ -197,10 +168,10 @@ def relative_angles(view_dir, illum_dir):
     return angle_zx, angle_zy, angle_xy
 
 
+
 def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
     results = []
     n = 0
-    I, w = Gbeam.gaussian_beam_wm2(0, 0, max_range, beam_waist, wavelength_nm, 1, theta_user1)
 
 
     for _ in range(n_samples):
@@ -208,31 +179,30 @@ def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
         roll = np.random.uniform(-np.pi, np.pi)
         pitch = np.random.uniform(-np.pi, np.pi)
 
-        yaw =0# np.random.uniform(-np.pi, np.pi)
+        yaw = np.random.uniform(-np.pi, np.pi)
 
 
         range_m = np.random.uniform(0, max_range)
         avg_pointing_accuracy_cartesian = (range_m / 2) * np.tan(theta_user1 / 2)
 
         X, Y = np.random.uniform(-avg_pointing_accuracy_cartesian, avg_pointing_accuracy_cartesian),np.random.uniform(-avg_pointing_accuracy_cartesian, avg_pointing_accuracy_cartesian)
-        #X,Y = 0,0
-        #azimuth = np.random.uniform(-np.pi , np.pi)
-        #elevation = 0 #np.random.uniform(-np.pi / 2, np.pi / 2)
+
+        azimuth =  np.random.uniform(-np.pi, np.pi)
+        elevation = np.arcsin(np.random.uniform(-1, 1))
 
         illum_dir = np.array([
-            np.random.uniform(-1 , 1),
-            np.random.uniform(-1 , 1),
-            np.random.uniform(-1 , 1)
+            np.cos(elevation) * np.cos(azimuth),
+            np.cos(elevation) * np.sin(azimuth),
+            np.sin(elevation)
         ])
-
 
         SNR = compute_SNR(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y)
 
         view_dir = [0,0,1]
         angle_zx, angle_zy, angle_xy = relative_angles(view_dir, illum_dir)
 
-        if SNR == 0:
-            range_m = 0
+        #if SNR == 0:
+           # range_m = 0
         results.append({
             "range_m": range_m,
             "roll": roll,
@@ -251,122 +221,195 @@ def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
 
     return results
 
-import matplotlib.pyplot as plt
-import warnings
-from scipy.ndimage import uniform_filter1d
-from scipy.optimize import curve_fit, OptimizeWarning
-from scipy.special import expit
+if __name__ == "__main__":
+    print(compute_pulse_energy(29000))
+    import matplotlib.pyplot as plt
+    plt.close('all')
 
-# --- Run simulation ---
-max_range = compute_range(pulse_energy_J)
-results = monte_carlo_SNR(2 * max_range, pulse_energy_J, 1000000)
+    from scipy.ndimage import uniform_filter1d
 
-above = [r for r in results if r["SNR"] >  0.3]
-below = [r for r in results if r["SNR"] <= 0.3]
+    from scipy.special import expit
 
-# --- Binning setup ---
-n_bins = 360
-bin_edges   = np.linspace(-np.pi, np.pi, n_bins + 1)
-bin_centres = (bin_edges[:-1] + bin_edges[1:]) / 2
-
-bin_ranges_above = np.full(n_bins, np.nan)
-bin_ranges_below = np.full(n_bins, np.nan)
-bin_range_90     = np.full(n_bins, np.nan)
-
-def sigmoid(r, r50, k):
-    return expit(-k * (r - r50))
-
-# --- Per-bin statistics ---
-for i in range(n_bins):
-    in_bin = lambda dataset: [r["range_m"] for r in dataset
-                               if bin_edges[i] <= r["angle_zy"] < bin_edges[i + 1]]
-
-    above_ranges = in_bin(above)
-    below_ranges = in_bin(below)
-
-    if above_ranges:
-        bin_ranges_above[i] = np.mean(above_ranges)
-    if below_ranges:
-        bin_ranges_below[i] = np.mean(below_ranges)
-
-    # sigmoid fit for 90% detection range
-    bin_data = ([(r, 1) for r in above_ranges] +
-                [(r, 0) for r in below_ranges])
-
-    if len(bin_data) < 10:
-        continue
-
-    bin_data.sort(key=lambda x: x[0])
-    ranges     = np.array([d[0] for d in bin_data])
-    detections = np.array([d[1] for d in bin_data])
-
-    positive_detections = 0
-    negative_detections = 0
-
-    for j in range(len(bin_data)):
-        r, detection = bin_data[j]
-        if detection == 1:
-            positive_detections += 1
-        elif detection == 0:
-            negative_detections += 1
-
-        total = positive_detections + negative_detections
-        if total > 0 and positive_detections / total < 0.99:
-            bin_range_90[i] = r
-            break
-
-
-
-
-
+    # --- Run simulation ---
+    # max_range = 5000#compute_range(pulse_energy_J)
     #
-    # if detections.sum() == 0 or detections.sum() == len(detections):
-    #     continue
+    # results = monte_carlo_SNR(2 * max_range, pulse_energy_J, 100000)
     #
-    # try:
-    #     with warnings.catch_warnings():
-    #         warnings.simplefilter("ignore", OptimizeWarning)
-    #         popt, _ = curve_fit(sigmoid, ranges, detections,
-    #                             p0=[np.median(ranges), 0.001],
-    #                             maxfev=5000)
-    #     r50, k = popt
-    #     if k > 0:
-    #         r90 = r50 - np.log(0.9 / 0.1) / k
-    #         if r90 > 0:
-    #             bin_range_90[i] = r90
-    # except RuntimeError:
-    #     continue
+    # def plotter():
+    #     print(f"plotter called with {len(results)} results")
+    #     above = [r for r in results if r["SNR"] >  0.3]
+    #     below = [r for r in results if r["SNR"] <= 0.3]
+    #
+    #     # --- Binning setup ---
+    #     n_bins = 360
+    #     bin_edges   = np.linspace(-np.pi, np.pi, n_bins + 1)
+    #     bin_centres = (bin_edges[:-1] + bin_edges[1:]) / 2
+    #
+    #     bin_ranges_above = np.full(n_bins, np.nan)
+    #     bin_ranges_below = np.full(n_bins, np.nan)
+    #     bin_range_90     = np.full(n_bins, np.nan)
+    #
+    #     # def sigmoid(r, r50, k):
+    #     #     return expit(-k * (r - r50))
+    #
+    #     # --- Per-bin statistics ---
+    #     for i in range(n_bins):
+    #         in_bin = lambda dataset: [r["range_m"] for r in dataset
+    #                                    if bin_edges[i] <= r["angle_zy"] < bin_edges[i + 1]]
+    #
+    #         above_ranges = in_bin(above)
+    #         below_ranges = in_bin(below)
+    #
+    #         if above_ranges:
+    #             bin_ranges_above[i] = np.mean(above_ranges)
+    #         if below_ranges:
+    #             bin_ranges_below[i] = np.mean(below_ranges)
+    #
+    #         # sigmoid fit for 90% detection range
+    #         bin_data = ([(r, 1) for r in above_ranges] +
+    #                     [(r, 0) for r in below_ranges])
+    #
+    #         if len(bin_data) < 10:
+    #             continue
+    #
+    #         bin_data.sort(key=lambda x: x[0])
+    #         ranges = np.array([d[0] for d in bin_data])
+    #         detections = np.array([d[1] for d in bin_data])
+    #
+    #         bin_range_90[i] = ranges[-1]  # default if threshold always met
+    #
+    #         for j in range(len(bin_data)):
+    #             r, detection = bin_data[j]
+    #
+    #             # look back over previous 100 candidates (or fewer if near the start)
+    #             window_start = max(0, j - 99)
+    #             window = detections[window_start: j + 1]
+    #
+    #             if len(window) < 10:  # skip until window is meaningful
+    #                 continue
+    #
+    #             if window.mean() < 0.90:
+    #                 bin_range_90[i] = r
+    #                 break
+    #
+    #
+    #     # --- Smoothing ---
+    #     def smooth(arr):
+    #         out = np.full(n_bins, np.nan)
+    #         valid = ~np.isnan(arr)
+    #         out[valid] = uniform_filter1d(arr[valid], size=5)
+    #         return out
+    #
+    #     smoothed_above = smooth(bin_ranges_above)
+    #     smoothed_below = smooth(bin_ranges_below)
+    #     smoothed_90    = smooth(bin_range_90)
+    #
+    #     # --- Plotting ---
+    #     fig, (ax1, ax2) = plt.subplots(1, 2, subplot_kw={"projection": "polar"}, figsize=(14, 6))
+    #
+    #     # Plot 1: raw SNR scatter
+    #     ax1.scatter([r["angle_zy"] for r in above], [r["range_m"] for r in above],
+    #                 c="blue", s=0.1, label="SNR > 0.3")
+    #     ax1.scatter([r["angle_zy"] for r in below], [r["range_m"] for r in below],
+    #                 c="red",  s=0.1, label="SNR <= 0.3")
+    #
+    #     ax1.set_title("Range vs Bearing (SNR)")
+    #     ax1.legend(loc="upper right")
+    #
+    #     # Plot 2: binned means + 90% detection range
+    #     ax2.scatter(bin_centres, bin_ranges_above, s=5, alpha=0.3, c="blue", label="above (mean)")
+    #     ax2.scatter(bin_centres, bin_ranges_below, s=5, alpha=0.3, c="red",  label="below (mean)")
+    #     ax2.plot(bin_centres, smoothed_above, linewidth=1.5, c="blue")
+    #     ax2.plot(bin_centres, smoothed_below, linewidth=1.5, c="red")
+    #     ax2.plot(bin_centres, smoothed_90,    linewidth=2.5, c="green", label="90% detection range")
+    #     ax2.set_title("Detection Range vs Bearing")
+    #     ax2.legend()
+    def plotter():
+        import random
+        print(f"plotter called with {len(results)} results")
+        sample = random.sample(results, min(50000, len(results)))
+        rand_above = [r for r in sample if r["SNR"] > min_SNR]
+        rand_below = [r for r in sample if r["SNR"] <= min_SNR]
 
-# --- Smoothing ---
-def smooth(arr):
-    out = np.full(n_bins, np.nan)
-    valid = ~np.isnan(arr)
-    out[valid] = uniform_filter1d(arr[valid], size=15)
-    return out
+        n_angle_bins = 360
+        range_bin_size_m = 1000
 
-smoothed_above = smooth(bin_ranges_above)
-smoothed_below = smooth(bin_ranges_below)
-smoothed_90    = smooth(bin_range_90)
+        max_r = max(r["range_m"] for r in results)
+        n_range_bins = int(np.ceil(max_r / range_bin_size_m))
 
-# --- Plotting ---
-fig, (ax1, ax2) = plt.subplots(1, 2, subplot_kw={"projection": "polar"}, figsize=(14, 6))
+        angle_edges = np.linspace(-np.pi, np.pi, n_angle_bins + 1)
+        angle_centres = (angle_edges[:-1] + angle_edges[1:]) / 2
+        range_edges = np.arange(0, (n_range_bins + 1) * range_bin_size_m, range_bin_size_m)
+        range_centres = (range_edges[:-1] + range_edges[1:]) / 2
 
-# Plot 1: raw SNR scatter
-ax1.scatter([r["angle_zy"] for r in below], [r["range_m"] for r in below],
-            c="red",  s=5, label="SNR <= 0.3")
-ax1.scatter([r["angle_zy"] for r in above], [r["range_m"] for r in above],
-            c="blue", s=5, label="SNR > 0.3")
-ax1.set_title("Range vs Bearing (SNR)")
-ax1.legend(loc="upper right")
+        counts_total = np.zeros((n_angle_bins, n_range_bins))
+        counts_above = np.zeros((n_angle_bins, n_range_bins))
 
-# Plot 2: binned means + 90% detection range
-ax2.scatter(bin_centres, bin_ranges_above, s=5, alpha=0.3, c="blue", label="above (mean)")
-ax2.scatter(bin_centres, bin_ranges_below, s=5, alpha=0.3, c="red",  label="below (mean)")
-ax2.plot(bin_centres, smoothed_above, linewidth=1.5, c="blue")
-ax2.plot(bin_centres, smoothed_below, linewidth=1.5, c="red")
-ax2.plot(bin_centres, smoothed_90,    linewidth=2.5, c="green", label="90% detection range")
-ax2.set_title("Detection Range vs Bearing")
-ax2.legend()
+        for r in results:
+            a_idx = int(np.searchsorted(angle_edges[1:], r["angle_zy"]))
+            a_idx = np.clip(a_idx, 0, n_angle_bins - 1)
+            r_idx = int(r["range_m"] // range_bin_size_m)
+            r_idx = np.clip(r_idx, 0, n_range_bins - 1)
+            counts_total[a_idx, r_idx] += 1
+            if r["SNR"] > min_SNR:
+                counts_above[a_idx, r_idx] += 1
 
-plt.tight_layout()
-plt.show()
+        thresholds = [0.90, 0.75, 0.50, 0.25, 0.1, 0.05, 0.01]
+        colours = {0.90: "#1a9641", 0.75: "#a6d96a", 0.50: "#fdae61", 0.25: "#d7191c", 0.10: "#b2182b", 0.05: "#762a83",
+                   0.01: "#2d004b"}
+        threshold_ranges = {t: np.full(n_angle_bins, np.nan) for t in thresholds}
+
+        for a_idx in range(n_angle_bins):
+            for t in thresholds:
+                for r_idx in range(n_range_bins):
+                    if counts_total[a_idx, r_idx] < 5:
+                        continue
+                    p = counts_above[a_idx, r_idx] / counts_total[a_idx, r_idx]
+                    if p >= t:
+                        threshold_ranges[t][a_idx] = range_edges[r_idx + 1]
+
+        def smooth(arr):
+            out = np.full(len(arr), np.nan)
+            valid = ~np.isnan(arr)
+            if valid.sum() > 0:
+                out[valid] = uniform_filter1d(arr[valid], size=15)
+            return out
+
+        #colours = {0.90: "green", 0.75: "blue", 0.50: "orange", 0.25: "red"}
+        #colours = {0.90: "#1a9641", 0.75: "#a6d96a", 0.50: "#fdae61", 0.25: "#d7191c"}
+        above = [r for r in results if r["SNR"] > min_SNR]
+        below = [r for r in results if r["SNR"] <= min_SNR]
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, subplot_kw={"projection": "polar"}, figsize=(14, 6))
+
+        rand_zero = [r for r in sample if r["SNR"] == 0]
+        rand_below = [r for r in sample if 0 < r["SNR"] <= min_SNR]
+
+        ax1.scatter([r["angle_zy"] for r in rand_zero], [r["range_m"] for r in rand_zero],
+                    c="black", alpha=0.3, s=1, label="SNR = 0")
+        ax1.scatter([r["angle_zy"] for r in rand_below], [r["range_m"] for r in rand_below],
+                    c="red", alpha=0.3, s=1, label=f"0 < SNR <= {min_SNR}")
+        ax1.scatter([r["angle_zy"] for r in rand_above], [r["range_m"] for r in rand_above],
+                    c="blue", s=1, label=f"SNR > {min_SNR}")
+        ax1.set_title("Range vs Bearing (SNR)")
+        ax1.legend(loc="upper right")
+        ax1.set_rlim(0, max_r)
+        ax2.set_rlim(0, max_r)
+        for t in thresholds:
+            smoothed = smooth(threshold_ranges[t])
+            ax2.plot(angle_centres, smoothed, linewidth=2, c=colours[t], label=f"{int(t * 100)}% detection")
+
+        ax2.set_title("Detection Range vs Bearing")
+        ax2.legend()
+    from scipy.special import expit
+
+    # --- Run simulation ---
+    max_range = 50000#compute_range(pulse_energy_J)
+    pulse_energy_J = 0.0025
+    results = monte_carlo_SNR(max_range, pulse_energy_J, 50000)
+
+    plotter()
+
+
+    plt.tight_layout()
+    plt.show()

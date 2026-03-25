@@ -7,7 +7,7 @@ from LiDAR import target_area_m2
 from Radar_Performance import lambda_radar, Pr_radar, Pt_radar, RCS_radar
 
 Uncertainty_Ellipse_Radius = 5000
-Sensor_FoV = np.concatenate((np.arange(0.05, 2, 0.1), np.arange(2, 180, 5)))
+Sensor_FoV = np.concatenate((np.arange(0.05, 2, 0.5), np.arange(2, 180,10 )))
 
 Minimum_Range = Uncertainty_Ellipse_Radius + Uncertainty_Ellipse_Radius / np.sin(np.radians(Sensor_FoV / 2))
 
@@ -35,8 +35,14 @@ for i in range(n):
     lambda_radar = 0.056
     radar_aperture_diameter = 0.3
     radar_gain = radar.Gain_Approx(FoV,lambda_radar,radar_aperture_diameter)
+    G_radar = radar_gain
+    Pr_radar = 0.9E-15
+    lambda_radar = lambda_radar
+    RCS_radar = 20
+    R_radar = R
+    L_radar = 1  # [Pr_radar, Pt_radar, G_radar, lambda_radar, RCS_radar, R_radar, L_radar]
+    radar_Pt[i] = Pr_radar/(radar_gain ** 2 * lambda_radar ** 2 * RCS_radar / ((4 * np.pi) ** 3 * R ** 4))
 
-    radar_Pt[i] = radar.compute_missing_radar(Pr_radar = 7.8E-18,Pt_radar = None,G_radar=radar_gain,lambda_radar = lambda_radar,RCS_radar =1, R_radar=R,L_radar =  1) # [Pr_radar, Pt_radar, G_radar, lambda_radar, RCS_radar, R_radar, L_radar]
 
 
 
@@ -44,17 +50,18 @@ for i in range(n):
     ##Lidar
 
     divergence_rad = np.radians(FoV)
-    spot_divergence_rad = np.radians(lidar.diffraction_limited_divergence_deg(1,1470e-9,0.002))
-    #spot_divergence_rad = 1.8e-3
-    ss_lidar_Pe[i] = lidar.compute_pulse_energy(R,divergence_rad) * area_scan_rate
-    scan_spot_area = 2 * np.pi * (1 - np.cos(spot_divergence_rad/2)) * R**2
+
+
+    ss_lidar_Pe[i] = lidar.compute_pulse_energy(R,divergence_rad)* area_scan_rate
+
+    #print(scan_spot_area)
+    #print(polling_rate)
+    spot_divergence_rad = 1.8e-3
+    scan_spot_area = 2 * np.pi * (1 - np.cos(spot_divergence_rad / 2)) * R ** 2
     divergence_steradian = 2 * np.pi * (1 - np.cos(divergence_rad/2))
     #spot_size_m =range_m * np.tan(divergence_rad)
     scan_surface_area =  divergence_steradian * R**2
     polling_rate = area_scan_rate*scan_surface_area/scan_spot_area
-    #print(scan_spot_area)
-    #print(polling_rate)
-
     scan_lidar_Pe[i] = lidar.compute_pulse_energy(R,spot_divergence_rad)
     scan_lidar_Pt[i] = scan_lidar_Pe[i] * polling_rate
 
@@ -109,25 +116,25 @@ ax1.grid(True)
 # Power axis
 ax2 = ax1.twinx()
 
-l2, = ax2.plot(Sensor_FoV, ss_lidar_Pe, label="Flash LiDAR Pulse Energy")
-l3, = ax2.plot(Sensor_FoV, radar_Pt, label="Radar Transmit Power")
+l2, = ax2.plot(Sensor_FoV, ss_lidar_Pe,linestyle="--", label="Flash LiDAR Pulse Energy")
+l3, = ax2.plot(Sensor_FoV, radar_Pt, linestyle="--", label="Radar Transmit Power")
 l4, = ax2.plot(Sensor_FoV, scan_lidar_Pt, label="Scan Lidar avg Power")
-l5, = ax2.plot(Sensor_FoV, The_Sun, label="The Sun (across area of scan)")
+#l5, = ax2.plot(Sensor_FoV, The_Sun, label="The Sun (across area of scan)")
 
 l6, = ax2.plot(Sensor_FoV, radar_P, label="Radar avg Power ")
 
-l7, = ax2.plot(Sensor_FoV, scan_lidar_Pe, label="Scan Lidar Pulse Energy ")
+l7, = ax2.plot(Sensor_FoV, scan_lidar_Pe,linestyle="--", label="Scan Lidar Pulse Energy ")
 
 ax2.set_ylabel("Transmit Power")
 ax2.set_yscale("log")
 
-lines = [l1, l2, l3, l4, l5,l6, l7]
+lines = [l1, l2, l3, l4, l6, l7]
 labels = [l.get_label() for l in lines]
 ax1.legend(lines, labels, loc="best")
-ax1.set_ylim(bottom=0, top = 200000)
-ax2.set_ylim(bottom=10e-9, top = 10000)
+ax1.set_ylim(bottom=0, top = 400000)
+ax2.set_ylim(top = 1000000)
 # ----- BOTTOM PLOT -----
-ax3.plot(Sensor_FoV, camera_FoV_per_px, color="purple", label="Camera FoV per pixel")
+l8, =ax3.plot(Sensor_FoV, camera_FoV_per_px, color="purple", label="Camera FoV per pixel")
 ax3.set_ylabel("Camera FoV per pixel (deg)")
 ax3.set_xlabel("Sensor Field of View (deg)")
 ax3.grid(True)
@@ -142,22 +149,24 @@ ax3.text(150, 0.00013/pixel_fill_req, " HEO Adler", va="top", ha="right")
 ax3.axhline(0.00137/pixel_fill_req, linestyle="--")
 ax3.text(175, 0.00137/pixel_fill_req, " Blackfly FL 100mm", va="bottom", ha="right")
 ax3.axhline(0.02, linestyle="--", color="red")
-ax3.text(175, 0.02, " Terma T3 ST", va="bottom", ha="right")
+#ax3.text(175, 0.02, " Terma T3 ST", va="bottom", ha="right")
 #ax3.axhline(0.002, linestyle="--", color="red")
 #ax3.text(181, 0.002, " Teledyne ST", va="center", ha="left")
 
 # Left and right axes
 ax3.set_ylabel("Camera FoV per pixel (deg)")
 ax4 = ax3.twinx()
-ax4.plot(Sensor_FoV, camera_H_Res, color="green", linestyle="-.", label="Camera Horizontal Resolution")
+l9, = ax4.plot(Sensor_FoV, camera_H_Res, color="green", linestyle="-.", label="Camera Horizontal Resolution")
 ax4.set_ylabel("Camera Horizontal Resolution (px)")
-
+lines = [l8, l9]
+labels = [l.get_label() for l in lines]
+ax3.legend(lines, labels, loc="best")
 # secax = ax3.secondary_xaxis('top', functions=(lambda fov: fov, lambda R: R))
 # secax.set_xlabel("Minimum Range (m)")
 # secax.set_ticks(Sensor_FoV)
 # secax.set_xticklabels([f"{r:.1f}" for r in Minimum_Range])
 
 plt.suptitle("Sensor FoV Trade vs Minimum Range and Required Transmit Energy")
-ax4.set_ylim(bottom=0, top = 6000)
-ax3.set_ylim(bottom=0, top = 0.0075)
+ax4.set_ylim(bottom=0, top = 10000)
+ax3.set_ylim(bottom=0, top = 0.01)
 plt.show()

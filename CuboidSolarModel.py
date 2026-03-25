@@ -64,12 +64,6 @@ def solar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials,
         contributions.append(face_return)
         total_return += face_return
 
-        #contributions.append(0)
-
-        # if within_fov(illum_dir,obs_dir,fov_rad=np.radians(10)):
-        #     total_return = 10000000000
-        #     print("Sun Blind: ",illum_dir)
-        #     #contributions[3] = total_return
 
     return total_return, np.array(contributions)
 
@@ -111,15 +105,10 @@ def plot_cuboid(length, width, height, roll, pitch, yaw, illum_dir, obs_dir):
     ax.legend()
     plt.show()
 
-def within_fov(illum_dir, obs_dir, fov_rad):
-    illum_dir = np.array(-illum_dir)
-    obs_dir   = np.array(obs_dir)
-    cos_angle = np.dot(illum_dir, obs_dir) / (np.linalg.norm(illum_dir) * np.linalg.norm(obs_dir))
-    angle     = np.arccos(np.clip(cos_angle, -1, 1))
-    return angle <= fov_rad / 2
-# -----------------------------
-# Example usage
-# -----------------------------
+
+# #-----------------------------
+# #Example usage
+# #-----------------------------
 # if __name__ == "__main__":
 #     length, width, height = 2.0, 1.0, 0.5
 #     roll, pitch, yaw = np.deg2rad(20), np.deg2rad(10), np.deg2rad(30)
