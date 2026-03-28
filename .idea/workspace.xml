@@ -5,13 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e47d2d8b-c5e4-4d05-a2f3-c64ddb5621d2" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/Radar_Sim.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/radar_cross_section.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/radiant_flux.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CuboidSolarModel.py" beforeDir="false" afterPath="$PROJECT_DIR$/CuboidSolarModel.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/LiDAR_Performance.py" beforeDir="false" afterPath="$PROJECT_DIR$/LiDAR_Performance.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Multimodal Ranges.py" beforeDir="false" afterPath="$PROJECT_DIR$/Multimodal Ranges.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Radar_Sim.py" beforeDir="false" afterPath="$PROJECT_DIR$/Radar_Sim.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -51,28 +47,28 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.CuboidLiDARModel.executor": "Run",
-    "Python.CuboidSolarModel.executor": "Run",
-    "Python.GaussianBeam.executor": "Run",
-    "Python.LaserScatter.executor": "Run",
-    "Python.LiDAR.executor": "Run",
-    "Python.LiDAR_Performance.executor": "Run",
-    "Python.LiDAR_Sim.executor": "Run",
-    "Python.Multimodal Ranges.executor": "Run",
-    "Python.Radar_Performance.executor": "Run",
-    "Python.Radar_Sim.executor": "Run",
-    "Python.RangePrecisionFromCamera.executor": "Run",
-    "Python.SurfaceParameterFitting.executor": "Run",
-    "Python.radar_cross_section.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "master"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.CuboidLiDARModel.executor&quot;: &quot;Run&quot;,
+    &quot;Python.CuboidSolarModel.executor&quot;: &quot;Run&quot;,
+    &quot;Python.GaussianBeam.executor&quot;: &quot;Run&quot;,
+    &quot;Python.LaserScatter.executor&quot;: &quot;Run&quot;,
+    &quot;Python.LiDAR.executor&quot;: &quot;Run&quot;,
+    &quot;Python.LiDAR_Performance.executor&quot;: &quot;Run&quot;,
+    &quot;Python.LiDAR_Sim.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Multimodal Ranges.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Radar_Performance.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Radar_Sim.executor&quot;: &quot;Run&quot;,
+    &quot;Python.RangePrecisionFromCamera.executor&quot;: &quot;Run&quot;,
+    &quot;Python.SurfaceParameterFitting.executor&quot;: &quot;Run&quot;,
+    &quot;Python.radar_cross_section.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager">
     <configuration name="LiDAR" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="SenseAndEffect" />
@@ -118,16 +114,5 @@
       <updated>1770984069283</updated>
     </task>
     <servers />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/LiDAR_Performance.py</url>
-          <line>237</line>
-          <option name="timeStamp" value="2" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
   </component>
 </project>

@@ -9,11 +9,11 @@ import Radar_Performance as radar
 import radiant_flux
 # Simulation parameters
 FoV = 25  # degrees
-Pt_radar = 700  # W
+Pt_radar = 50  # W
 Pr_radar_min = 7.8e-18  # W
 lambda_radar = 0.056  # m
 radar_aperture_diameter = 0.3  # m
-radar_gain = 100
+radar_gain = 10
 #radar_gain = radar.Gain_Approx(FoV, lambda_radar, radar_aperture_diameter)
 print(radar_gain)
 absorption = 1
@@ -47,7 +47,7 @@ def monte_carlo_SNR(max_range, samples):
         orientation = np.random.uniform(-180, 180)  # degrees
         R = np.random.uniform(1, max_range)  # avoid R=0
 
-        target_rcs =  rcs.get_rcs_m2(orientation)*16
+        target_rcs =  rcs.get_rcs_m2(orientation)*16*5
 
         Pr = Pt_radar * radar_gain ** 2 * lambda_radar ** 2 * target_rcs / ((4 * np.pi) ** 3 * R ** 4)
 
@@ -121,9 +121,9 @@ if __name__ == "__main__":
             if r["SNR"] > min_SNR:
                 counts_above[a_idx, r_idx] += 1
 
-        thresholds = [0.90, 0.75, 0.50, 0.25, 0.1, 0.05, 0.01]
+        thresholds = [0.90,  0.50, 0.25, 0.1, 0.05, 0.01]
         colours = {
-            0.90: "#1a9641", 0.75: "#a6d96a", 0.50: "#fdae61",
+            0.90: "#1a9641",  0.50: "#fdae61",
             0.25: "#d7191c", 0.10: "#b2182b", 0.05: "#762a83", 0.01: "#2d004b"
         }
         threshold_ranges = {t: np.full(n_angle_bins, np.nan) for t in thresholds}
@@ -182,8 +182,8 @@ if __name__ == "__main__":
         ax2.set_title("Detection Range vs Bearing")
         ax2.legend()
 
-    max_range = 45000
-    results = monte_carlo_SNR(max_range, 5000000)
+    max_range = 10000
+    results = monte_carlo_SNR(max_range, 50000)
 
     plotter()
 

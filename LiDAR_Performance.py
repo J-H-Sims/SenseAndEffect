@@ -7,8 +7,8 @@ import CuboidSolarModel as solar
 
 aperture_area_m2 = np.pi * (0.015 ** 2)  # receiver aperture area (mm^2)
 
-pulse_width_s = 5e-9  # laser pulse duration (s)
-wavelength_nm = 1470  # laser wavelength (nm)
+pulse_width_s = 7e-9  # laser pulse duration (s)
+wavelength_nm = 1535  # laser wavelength (nm)
 
 PLANCK_CONSTANT = 6.62607015e-34
 SPEED_OF_LIGHT = 299792458
@@ -29,11 +29,11 @@ yaw1=45
 face_materials1 = ["Brushed V Al","Brushed V Al","Brushed V Al","Brushed V Al","Brushed V Al","Brushed V Al"]
 
 range_m=10000
-pulse_energy = 0.001
+pulse_energy = 0.0009
 pulse_energy_J = pulse_energy
 obs_dir = np.array([0, 0, 1])
 illum_dir = np.array([0, 0,1])
-theta_user1 =np.radians(0.1)
+theta_user1 =0.007#np.radians(50)
 #theta_user1 =0.007
 beam_waist = 0.001
 
@@ -82,7 +82,7 @@ def compute_solar_photons(range_m, length=length1, width=width1, height=height1,
 
     view_dir = obs_dir
     angle_zx, angle_zy, angle_xy = relative_angles(view_dir, illum_dir)
-    FoV = np.pi - np.radians(max(theta_user1,10))
+    FoV = np.pi - max(theta_user1/2,np.radians(5))
     solar_disk_radius = np.pi - np.radians(0.265)
 
     if abs(angle_zx) > solar_disk_radius or abs(angle_zy) > solar_disk_radius:
@@ -355,8 +355,10 @@ if __name__ == "__main__":
                 counts_above[a_idx, r_idx] += 1
 
         thresholds = [0.90, 0.75, 0.50, 0.25, 0.1, 0.05, 0.01]
+
         colours = {0.90: "#1a9641", 0.75: "#a6d96a", 0.50: "#fdae61", 0.25: "#d7191c", 0.10: "#b2182b", 0.05: "#762a83",
                    0.01: "#2d004b"}
+
         threshold_ranges = {t: np.full(n_angle_bins, np.nan) for t in thresholds}
 
         for a_idx in range(n_angle_bins):
@@ -395,18 +397,17 @@ if __name__ == "__main__":
         ax1.legend(loc="upper right")
         ax1.set_rlim(0, max_r)
         ax2.set_rlim(0, max_r)
-        for t in thresholds:
+        for t in reversed(thresholds):
             smoothed = smooth(threshold_ranges[t])
             ax2.plot(angle_centres, smoothed, linewidth=2, c=colours[t], label=f"{int(t * 100)}% detection")
-
         ax2.set_title("Detection Range vs Bearing")
         ax2.legend()
     from scipy.special import expit
 
     # --- Run simulation ---
-    max_range = 50000#compute_range(pulse_energy_J)
-    pulse_energy_J = 0.0025
-    results = monte_carlo_SNR(max_range, pulse_energy_J, 50000)
+    max_range = 30000#compute_range(pulse_energy_J)
+    #pulse_energy_J = 0.0025
+    results = monte_carlo_SNR(max_range, pulse_energy_J, 500000)
 
     plotter()
 
