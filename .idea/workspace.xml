@@ -6,8 +6,12 @@
   <component name="ChangeListManager">
     <list default="true" id="e47d2d8b-c5e4-4d05-a2f3-c64ddb5621d2" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CuboidLiDARModel.py" beforeDir="false" afterPath="$PROJECT_DIR$/CuboidLiDARModel.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CuboidSolarModel.py" beforeDir="false" afterPath="$PROJECT_DIR$/CuboidSolarModel.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/LiDAR_Performance.py" beforeDir="false" afterPath="$PROJECT_DIR$/LiDAR_Performance.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/LiDAR_Sim.py" beforeDir="false" afterPath="$PROJECT_DIR$/LiDAR_Sim.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Radar_Sim.py" beforeDir="false" afterPath="$PROJECT_DIR$/Radar_Sim.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lidar_params.json" beforeDir="false" afterPath="$PROJECT_DIR$/lidar_params.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

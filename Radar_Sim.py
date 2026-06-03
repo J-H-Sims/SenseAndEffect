@@ -1,33 +1,39 @@
 import numpy as np
-from sympy import elliptic_f
 import random
-
-from sympy.physics.units import boltzmann
-
 import radar_cross_section as rcs
-import Radar_Performance as radar
 import radiant_flux
+
+
 # Simulation parameters
 FoV = 25  # degrees
 Pt_radar = 50  # W
 Pr_radar_min = 7.8e-18  # W
 lambda_radar = 0.056  # m
 radar_aperture_diameter = 0.3  # m
+avg_power = 10 #W
+
+#Gain: ste or compute (comment out as appropriate)
 radar_gain = 10
 #radar_gain = radar.Gain_Approx(FoV, lambda_radar, radar_aperture_diameter)
 print(radar_gain)
+
+
+#Target Parameters
 absorption = 1
 emmisivity = 1
 Ap = 0.3*0.3
 Ar = 0.3*0.3
 
-
+#Physics Constants
 B = 1e6  # radar bandwidth [Hz]
 k = 1.38e-23  # Boltzmann constant
-sb = 5.6e-8
-avg_power = 10
+sb = 5.6e-8 #Steffan-Boltzmann
 
+#SNR requirement
 min_SNR = 0.3
+
+
+#Function to extract pointing quartiles form random azimuth
 def get_pointing_from_azimuth(azimuth_deg):
     az = azimuth_deg+180
     az = azimuth_deg % 360  # normalize
@@ -40,6 +46,7 @@ def get_pointing_from_azimuth(azimuth_deg):
         return "sun"
     elif (az >= 225 and az < 315):
         return "zenith"
+
 
 def monte_carlo_SNR(max_range, samples):
     results = []
@@ -62,17 +69,13 @@ def monte_carlo_SNR(max_range, samples):
         S = radiant_flux.get_radiant_flux(case, 500, pointing, beta)
 
         T = ((S*absorption*Ap+avg_power)/(emmisivity*Ar*sb))**0.25
-        #print(S, pointing, T)
 
-        #Trx = 0
-        #Tant = np.random.uniform(0, 84)
-        #Tsys =Trx + Tant
 
         if Pr < Pr_radar_min:
             SNR = 0
         else:
             SNR = Pr / (k * T * B)
-            #print(k*T*B)
+
 
         results.append({
             "range_m": R,

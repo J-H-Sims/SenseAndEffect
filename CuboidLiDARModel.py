@@ -61,7 +61,7 @@ def lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
         if cos_theta <= 0:
             continue
         kd, kr, beta = material_params[mat]
-        r_frac = kd * cos_theta + kr * cos_theta ** beta
+        r_frac = (kd/np.pi) * cos_theta + kr * cos_theta ** beta
         total_return += r_frac * A_face * cos_theta  # projected area included
         target_area += A_face* cos_theta
 
@@ -72,23 +72,16 @@ def lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
 # -----------------------------
 if __name__ == "__main__":
     # Cuboid size (meters)
-    length, width, height = 2.0, 2.0, 2
+    length, width, height = 0.01,0.01,0.01
 
     # Orientation in radians
-    roll = np.deg2rad(90)
-    pitch = np.deg2rad(0)
-    yaw = np.deg2rad(0)
+    roll = np.deg2rad(45)
+    pitch = np.deg2rad(45)
+    yaw = np.deg2rad(45)
 
     # Materials per face: +X, -X, +Y, -Y, +Z, -Z
-    face_materials = [
-        "Brushed V Al",
-        "Brushed V Al",
-        "Brushed V Al",
-        "Brushed V Al",
-        "Brushed V Al",
-        "Brushed V Al"
-    ]
+    face_materials = ["Lambertian 20%","Lambertian 20%","Lambertian 20%","Lambertian 20%","Lambertian 20%","Lambertian 20%"]
 
     total_power,target_area = lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
     print(f"Total LiDAR return for cuboid: {total_power:.6f}  J/J")
-
+    print(target_area)

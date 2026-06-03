@@ -51,7 +51,7 @@ def solar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials,
         kd, kr, beta = material_params[mat]
 
         # Lambertian component (incident-driven)
-        lambert = kd * cos_i
+        lambert = (kd/np.pi) * cos_i
 
         # Specular/retro component: ideal reflection direction
         r_ideal = 2 * np.dot(n, illum_dir) * n - illum_dir
@@ -162,9 +162,9 @@ def plot_yaw_sweep(length, width, height, roll, pitch, face_materials, illum_dir
 # -----------------------------
 if __name__ == "__main__":
     # dimensions and orientation
-    length, width, height = 2.0, 1.0, 1
+    length, width, height = 0.01,0.01,0.01
     roll, pitch = np.deg2rad(0), np.deg2rad(0)  # keep fixed for 2D sweep
-    face_materials = ["Brushed V Al"]*6
+    face_materials = ["Lambertian 20%"]*6
 
     # constant illumination and observation
     obs_dir = np.array([0,1, 0])
