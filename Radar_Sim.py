@@ -21,14 +21,15 @@ import radiant_flux
 import Radar_Performance as radar
 
 # ── Simulation parameters ─────────────────────────────────────────────
-FoV                  = 25       # sensor field of view (deg)
+FoV                  = 25       # sensor field of view (deg) — inactive while gain is hardcoded; only used by Gain_Approx
 Pt_radar             = 50       # peak transmit power (W)
 Pr_radar_min         = 7.8e-18  # minimum detectable received power (W)
 lambda_radar         = 0.056    # radar wavelength (m)
-radar_aperture_diameter = 0.3   # (m)
+radar_aperture_diameter = 0.3   # (m) — inactive while gain is hardcoded; only used by Gain_Approx
 avg_power            = 10       # average spacecraft bus power dissipated as heat (W)
 
-# Gain: set to 10 or uncomment the line below to compute from aperture
+# Gain hardcoded to 10. To derive it from FoV/aperture/wavelength instead, replace with:
+#   radar_gain = radar.Gain_Approx(FoV, lambda_radar, radar_aperture_diameter)
 radar_gain = 10
 print(radar_gain)
 
@@ -127,7 +128,6 @@ if __name__ == "__main__":
         print(f"plotter called with {len(results)} results")
         sample     = random.sample(results, min(50000, len(results)))
         rand_above = [r for r in sample if r["SNR"] > min_SNR]
-        rand_below = [r for r in sample if r["SNR"] <= min_SNR]
 
         n_angle_bins     = 360
         range_bin_size_m = 1000

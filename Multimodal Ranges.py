@@ -13,7 +13,6 @@ between sensitivity/power and coverage area.
 import numpy as np
 import Radar_Performance as radar
 import LiDAR_Performance as lidar
-from Radar_Performance import lambda_radar, Pr_radar, Pt_radar, RCS_radar
 
 # Minimum stand-off: sensor must be far enough that the uncertainty ellipse
 # subtends a small enough angle. Minimum_Range grows with FoV because a wider
@@ -28,7 +27,6 @@ radar_Pt       = np.zeros(n)  # radar peak transmit power (W)
 ss_lidar_Pe    = np.zeros(n)  # flash LiDAR pulse energy (J)
 scan_lidar_Pt  = np.zeros(n)  # scanning LiDAR average power (W)
 scan_lidar_Pe  = np.zeros(n)  # scanning LiDAR pulse energy (J)
-The_Sun        = np.zeros(n)  # solar power across the scan surface (W), for reference
 camera_FoV_per_px = np.zeros(n)
 camera_H_Res   = np.zeros(n)
 radar_P        = np.zeros(n)  # radar average power (W)
@@ -49,7 +47,6 @@ for i in range(n):
     radar_gain = radar.Gain_Approx(FoV, lambda_radar, radar_aperture_diameter)
     Pr_radar   = 0.9E-15   # minimum detectable received power (W)
     RCS_radar  = 20        # target radar cross-section (m^2)
-    L_radar    = 1         # system loss factor
 
     # Solve radar range equation for peak transmit power (shared core in Radar_Performance)
     radar_Pt[i] = radar.radar_solve_transmit_power(Pr_radar, radar_gain, lambda_radar, RCS_radar, R)
@@ -72,10 +69,6 @@ for i in range(n):
     polling_rate    = area_scan_rate * scan_surface_area / scan_spot_area
     scan_lidar_Pe[i] = lidar.compute_pulse_energy(R, spot_divergence_rad)
     scan_lidar_Pt[i] = scan_lidar_Pe[i] * polling_rate  # average power = energy × pulse rate
-
-    ss_lidar_Pe[i] = lidar.compute_pulse_energy(R, divergence_rad) * area_scan_rate
-
-    The_Sun[i] = 1380 * scan_surface_area  # solar constant × solid scan area (W), reference only
 
     # ── Camera ────────────────────────────────────────────────────────
     pixel_fill_req = 0.5  # fraction of target that must be covered by a pixel for detection

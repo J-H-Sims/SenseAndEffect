@@ -20,7 +20,7 @@ Range       = 7500    # reference range for the single-point calculation (m)
 
 # ── Single-point calculation ───────────────────────────────────────────
 # Angular width in degrees, then convert to pixel count
-Sub_Tgt_Ang   = np.atan(TargetWidth / Range) * 360 / np.pi
+Sub_Tgt_Ang   = np.atan(TargetWidth / Range) * 180 / np.pi
 True_Pxl_Width = Sub_Tgt_Ang / FoVpp
 print("True Pixel Width:", True_Pxl_Width)
 

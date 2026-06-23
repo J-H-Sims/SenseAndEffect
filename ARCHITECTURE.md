@@ -32,6 +32,7 @@ flowchart TB
     end
     RCS -- import as rcs --> RSim
     RF  -- import        --> RSim
+    RP  -- import as radar --> RSim
 
     subgraph camera[Camera]
         RPC[RangePrecisionFromCamera.py]
@@ -69,8 +70,8 @@ Four scripts are meant to be run directly, plus two modules that double as runna
 | `LiDAR_Performance.py` | Full LiDAR SNR model + Monte Carlo | CuboidLiDARModel, GaussianBeam, CuboidSolarModel | Multimodal Ranges | numpy, scipy, matplotlib | none past its imports |
 | `radar_cross_section.py` | RCS lookup table, dBsm to m^2, interpolation | — | Radar_Sim | (none) | none |
 | `radiant_flux.py` | Orbital radiant flux lookup table | — | Radar_Sim | (none) | none |
-| `Radar_Performance.py` | Symbolic radar range equation + solver, gain approx | — | Multimodal Ranges | numpy, sympy | defines sympy symbols |
-| `Radar_Sim.py` | Radar SNR Monte Carlo with thermal noise floor | radar_cross_section, radiant_flux | — | numpy, scipy, matplotlib | none past its imports |
+| `Radar_Performance.py` | Radar range equation numeric core + symbolic solver, gain approx | — | Radar_Sim, Multimodal Ranges | numpy, sympy | defines sympy symbols |
+| `Radar_Sim.py` | Radar SNR Monte Carlo with thermal noise floor | radar_cross_section, radiant_flux, Radar_Performance | — | numpy, scipy, matplotlib | none past its imports |
 | `RangePrecisionFromCamera.py` | Camera range precision from subtended pixels | — | — | numpy, matplotlib | runs calc, shows plot |
 | `Multimodal Ranges.py` | Cross modality FoV trade study | Radar_Performance, LiDAR_Performance | — | numpy, matplotlib | runs study, shows plot |
 
@@ -78,7 +79,7 @@ Four scripts are meant to be run directly, plus two modules that double as runna
 
 **LiDAR signal path.** `SurfaceParameterFitting` fits measured reflectance and writes `lidar_params.json`. At run time `GaussianBeam` gives the beam irradiance at the target, `CuboidLiDARModel` turns that into a BRDF weighted return using the JSON coefficients, and `CuboidSolarModel` supplies the solar background. `LiDAR_Performance` combines all three into photons per pulse, an SNR, and a Monte Carlo over orientation, range, and sun direction.
 
-**Radar path.** `radar_cross_section` provides the target RCS at a given aspect and `radiant_flux` provides the orbital thermal environment used to derive the receiver noise temperature. `Radar_Sim` ties them together through the radar equation and runs its own Monte Carlo. Separately, `Radar_Performance` holds a symbolic form of the radar equation used by the trade study.
+**Radar path.** `radar_cross_section` provides the target RCS at a given aspect and `radiant_flux` provides the orbital thermal environment used to derive the receiver noise temperature. The radar range equation itself lives once in `Radar_Performance` (`radar_received_power` / `radar_solve_transmit_power`); `Radar_Sim` calls the forward form per Monte Carlo sample, and `Multimodal Ranges` calls the inverse to solve for transmit power.
 
 **Camera path.** `RangePrecisionFromCamera` stands alone: target width plus angular resolution gives subtended pixels, and a blur term gives the resulting range uncertainty.
 
@@ -86,15 +87,13 @@ Four scripts are meant to be run directly, plus two modules that double as runna
 
 ## Structural notes worth knowing
 
-- **`Radar_Sim` does not use `Radar_Performance`.** It reimplements the radar equation inline. `Radar_Performance` is consumed only by `Multimodal Ranges`. So the two radar files are independent rather than layered, which is easy to misread.
+- **The radar equation has one home.** `Radar_Performance` holds the numeric forward and inverse functions, and both `Radar_Sim` (per sample) and `Multimodal Ranges` (solving for transmit power) call them rather than re-typing the formula. The sympy `compute_missing_radar` remains as a general solve-for-any-unknown helper but is off the hot path and currently unused.
 
 - **`lidar_params.json` is read at import time with a relative path.** Both `CuboidLiDARModel` and `CuboidSolarModel` call `open("lidar_params.json")` at module top level, so anything importing them (directly or via `LiDAR_Performance` and `Multimodal Ranges`) must run with the working directory set to the project root, or the import fails. The dependency is implicit and not obvious from the import lines.
 
 - **Three scripts run heavy work at module top level with no `__main__` guard:** `Multimodal Ranges.py`, `RangePrecisionFromCamera.py`, and `SurfaceParameterFitting.py`. Importing any of them executes the full computation and pops a plot. The guarded modules are `CuboidLiDARModel`, `CuboidSolarModel`, `LiDAR_Performance`, and `Radar_Sim`.
 
 - **`Multimodal Ranges.py` cannot be imported.** The space in the filename makes it script only, which is fine since it sits at the top of the graph and nothing depends on it.
-
-- **`Multimodal Ranges` rebinds names it imports.** It does `from Radar_Performance import lambda_radar, Pr_radar, Pt_radar, RCS_radar` and then overwrites those same names inside its loop, so the imported values are shadowed rather than used.
 
 ## External dependencies
 

@@ -33,12 +33,12 @@ def rotation_matrix(roll, pitch, yaw):
                    [0,0,1]])
     return Rz @ Ry @ Rx
 
-def cuboid_faces(length, width, height):
+def cuboid_faces():
     """Return unit outward normals for each of the 6 cuboid faces in the local body frame.
 
-    Normals are not yet rotated into the world/observer frame; that happens in
-    the caller. Face areas are also computed in the caller rather than here.
-    Face order: +X, -X, +Y, -Y, +Z, -Z.
+    Takes no dimensions: normals are direction only. They are not yet rotated
+    into the world/observer frame (that happens in the caller), and face areas
+    are computed in the caller rather than here. Face order: +X, -X, +Y, -Y, +Z, -Z.
     """
     normals = np.array([
         [1,0,0], [-1,0,0],  # X faces
@@ -57,7 +57,7 @@ def lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
     """
     obs_dir = np.array([0,0,1])  # sensor boresight in world frame
     R = rotation_matrix(roll, pitch, yaw)
-    normals = cuboid_faces(length, width, height)
+    normals = cuboid_faces()
     normals_rot = normals @ R.T  # rotate body-frame normals into world frame
 
     face_areas = np.array([

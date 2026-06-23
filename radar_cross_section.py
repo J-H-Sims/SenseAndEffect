@@ -38,7 +38,6 @@ def get_rcs_dBsm(azimuth):
         return data[azimuth]
 
     # Linear interpolation between the two nearest table entries
-    import math
     keys = sorted(data.keys())
     for i in range(len(keys) - 1):
         a0, a1 = keys[i], keys[i + 1]

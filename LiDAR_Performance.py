@@ -52,8 +52,6 @@ face_materials1 = ["Lambertian 20%"] * 6
 range_m      = 10000
 pulse_energy = 0.0009
 pulse_energy_J = pulse_energy
-obs_dir      = np.array([0, 0, 1])
-illum_dir    = np.array([0, 0, 1])
 theta_user1  = 0.0003   # laser half-angle divergence (rad)
 beam_waist   = 0.001    # beam waist at focus (m)
 
@@ -69,16 +67,16 @@ def compute_photons_p_pulse(X=0, Y=0, z=10000, w0=0.001, wavelength=wavelength_n
     rather than propagating a return Gaussian, which avoids needing a return
     beam waist estimate.
     """
-    I, w = Gbeam.gaussian_beam_wm2(X, Y, z, w0, wavelength, P_total, theta_user)
+    I, _ = Gbeam.gaussian_beam_wm2(X, Y, z, w0, wavelength, P_total, theta_user)
 
-    # R is the normalised BRDF-weighted return (J/J), target_area_m2 is the projected visible area
-    R, target_area_m2 = target.lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
+    # R is the normalised BRDF-weighted return (J/J); the projected area term is unused here
+    R, _ = target.lidar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials)
 
     # Solid angle subtended by the aperture at range z
-    solid_angle = aperture_area_m2 / range_m ** 2
+    solid_angle = aperture_area_m2 / z ** 2
     received_energy = R * solid_angle * I
 
-    photon_energy_J    = (PLANCK_CONSTANT * SPEED_OF_LIGHT) / (wavelength_nm * 1e-9)
+    photon_energy_J    = (PLANCK_CONSTANT * SPEED_OF_LIGHT) / (wavelength * 1e-9)
     photons_per_pulse  = received_energy / photon_energy_J
 
     return photons_per_pulse
@@ -99,7 +97,7 @@ def compute_solar_photons(range_m, length=length1, width=width1, height=height1,
       - Full glare if the sun is within the sensor FoV (angular offset > FoV boundary).
       - Partial glare with linear fall-off between the FoV edge and the solar disk boundary.
     """
-    R, contributions = solar.solar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials, illum_dir, obs_dir)
+    R, _ = solar.solar_return_cuboid(length, width, height, roll, pitch, yaw, face_materials, illum_dir, obs_dir)
 
     solid_angle = aperture_area_m2 / range_m**2
 
@@ -111,13 +109,15 @@ def compute_solar_photons(range_m, length=length1, width=width1, height=height1,
     solar_photons    = (solar_collected_W / photon_energy_J) * pulse_width_s
 
     view_dir = obs_dir
-    angle_zx, angle_zy, angle_xy = relative_angles(view_dir, illum_dir)
+    angle_zx, angle_zy, _ = relative_angles(view_dir, illum_dir)
 
     # FoV angle outside which the sun causes direct glare; clamped to 5 deg minimum
     FoV = np.pi - max(theta_user1 / 2, np.radians(5))
     # Angular radius of the solar disk (0.265 deg half-angle)
     solar_disk_radius = np.pi - np.radians(0.265)
 
+
+    # Calculates the direct solar photons entering the aperture when the sun is within or near the FoV. This is an approximation and is basically a user defined FoV - 
     direct_solar_photons = 0
     if abs(angle_zx) > solar_disk_radius or abs(angle_zy) > solar_disk_radius:
         # Sun is on the boresight — full direct irradiance enters the aperture
@@ -238,7 +238,7 @@ def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
         SNR = compute_SNR(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y)
 
         view_dir = [0, 0, 1]
-        angle_zx, angle_zy, angle_xy = relative_angles(view_dir, illum_dir)
+        angle_zx, angle_zy, _ = relative_angles(view_dir, illum_dir)
 
         results.append({
             "range_m":      range_m,
@@ -247,7 +247,6 @@ def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
             "yaw":          yaw,
             "angle_zx":     angle_zx,
             "angle_zy":     angle_zy,
-            "angle_xy":     angle_xy,
             "pulse_energy": pulse_energy_J,
             "SNR":          SNR
         })
@@ -314,7 +313,6 @@ if __name__ == "__main__":
         print(f"plotter called with {len(results)} results")
         sample      = random.sample(results, min(50000, len(results)))
         rand_above  = [r for r in sample if r["SNR"] > min_SNR]
-        rand_below  = [r for r in sample if r["SNR"] <= min_SNR]
 
         n_angle_bins     = 360
         range_bin_size_m = 1000
@@ -361,9 +359,6 @@ if __name__ == "__main__":
                 out[valid] = uniform_filter1d(arr[valid], size=15)
             return out
 
-        above = [r for r in results if r["SNR"] > min_SNR]
-        below = [r for r in results if r["SNR"] <= min_SNR]
-
         fig, (ax1, ax2) = plt.subplots(1, 2, subplot_kw={"projection": "polar"}, figsize=(14, 6))
 
         rand_zero  = [r for r in sample if r["SNR"] == 0]
@@ -385,8 +380,6 @@ if __name__ == "__main__":
             ax2.plot(angle_centres, smoothed, linewidth=2, c=colours[t], label=f"{int(t * 100)}% detection")
         ax2.set_title("Detection Range vs Bearing")
         ax2.legend()
-
-    from scipy.special import expit
 
     max_range = 10000
     results   = monte_carlo_SNR(max_range, pulse_energy_J, 30000)
