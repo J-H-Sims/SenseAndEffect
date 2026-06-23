@@ -1,65 +1,57 @@
+"""
+GaussianBeam.py
+
+Models Gaussian beam propagation for a laser.
+
+The beam has a waist w0 at focus and diverges with a half-angle determined by
+the larger of the diffraction limit (lambda / pi*w0) and a user-supplied
+divergence. This lets callers override the ideal diffraction limit to simulate
+a non-ideal or truncated beam.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 def gaussian_beam_radius(z, w0, wavelength, theta_user=0.0):
-    """
-    Returns Gaussian beam radius at distance z, plus beam waist w0.
+    """Return the 1/e^2 beam radius at distance z along the propagation axis.
 
     Parameters:
-        z : distance along propagation axis (m)
-        w0 : beam waist (1/e^2 radius) at focus (m)
-        wavelength : laser wavelength (m)
-        theta_user : desired divergence angle (full-angle in rad)
+        z          : axial distance from the waist (m)
+        w0         : beam waist radius at focus (m)
+        wavelength : laser wavelength (nm)
+        theta_user : desired full-angle divergence (rad); 0 means diffraction-limited
 
-    Returns:
-        w_z : beam radius at distance z (1/e^2 of peak)
-        w0  : beam waist radius (1/e^2 of peak)
+    The effective half-angle is clamped to max(theta_diff, theta_user/2) so a
+    larger user divergence always wins over the diffraction limit.
     """
-    # Diffraction-limited divergence
-    theta_diff = wavelength *(10**-9) / (np.pi * w0)
-    #print(f"theta diff: {theta_diff}")
+    # Diffraction-limited half-angle divergence (lambda in nm converted to m)
+    theta_diff = wavelength * (10**-9) / (np.pi * w0)
+    # Use the larger of the two divergences so user can only make the beam wider
     theta_eff = max(theta_diff, theta_user)
 
-    # Beam radius at distance z
+    # Linear approximation: w(z) = w0 + z * tan(half-angle)
     w_z = w0 + z * np.tan(theta_eff / 2)
 
     return w_z
 
 def gaussian_beam_wm2(x, y, z, w0, wavelength, P_total, theta_user=0.0):
+    """Return the Gaussian beam irradiance (W/m^2) at transverse position (x, y) and axial distance z.
+
+    Uses the same divergence model as gaussian_beam_radius. The Gaussian profile
+    gives peak irradiance 2*P / (pi*w^2) on-axis, falling off as exp(-2r^2/w^2).
+
+    Returns:
+        I           : irradiance at (x, y, z) in W/m^2
+        spot_radius : 1/e^2 beam radius at z (m), for reference
     """
-    Gaussian beam in W/m².
-    """
-    theta_diff = wavelength*(10**-9)  / (np.pi * w0)
-    theta_eff = max(theta_diff, theta_user)
+    theta_diff = wavelength * (10**-9) / (np.pi * w0)
+    theta_eff  = max(theta_diff, theta_user)
     w_z = w0 + z * np.tan(theta_eff / 2)
+
     r2 = x**2 + y**2
+    # Standard Gaussian irradiance profile
     I = (2 * P_total / (np.pi * w_z**2)) * np.exp(-2 * r2 / w_z**2)
 
     spot_radius = gaussian_beam_radius(z, w0, wavelength, theta_user)
 
     return I, spot_radius
-#
-# # -----------------------------
-# # Example usage
-# # -----------------------------
-# w0 = 0.001  # 5 cm beam waist
-# wavelength = 1.55e-6  # 1550 nm
-# theta_user = np.deg2rad(1)  # 0.5 deg divergence
-# P_total = 1.0
-# z = 10000.0  # meters downrange
-#
-# x = np.linspace(-100, 100, 200)
-# y = np.linspace(-100, 100, 200)
-# X, Y = np.meshgrid(x, y)
-# I, w = gaussian_beam_wm2(X, Y, z, w0, wavelength, P_total, theta_user)
-# print(w)
-# print(z*np.tan(theta_user)/2)
-# print(gaussian_beam_wm2(0,0, z, w0, wavelength, P_total, theta_user))
-# plt.figure(figsize=(6, 5))
-# plt.pcolormesh(X, Y, Z, shading='auto', cmap='inferno')
-# plt.colorbar(label=f'Beam intensity at z={z} m')
-# plt.xlabel("X (m)")
-# plt.ylabel("Y (m)")
-# plt.title("Gaussian beam: diffraction + user divergence")
-# plt.axis('equal')
-# plt.show()
