@@ -29,7 +29,15 @@ PLANCK_CONSTANT  = 6.62607015e-34
 SPEED_OF_LIGHT   = 299792458
 ## ── Default system parameters (overridden via function arguments) ──────
 ## Laser beam properties
-pulse_width_s    = 10e-9          # length of pulse - this impacts the SNR as longer pulses will include more sunlight photons
+# NOTE: Deriving the background exposure from range resolution is an approximation.
+# A real detector integrates solar background over its full electrical gate / readout
+# window, which is set by the range bin the system resolves (range_resolution / c),
+# not by the laser pulse width. This is deliberately more conservative than a pulse
+# width derived exposure: the range gate is wider than the pulse, so it admits more
+# background light and yields a lower, more pessimistic SNR. It does not capture
+# detector bandwidth, dead time, or multi bin integration effects.
+range_resolution = 100          # desired range resolution (m) - sets the detector time gate; finer resolution lets in less background light
+exposure_time    = range_resolution / SPEED_OF_LIGHT  # detector gate window (s) - the time the detector integrates background light for each range bin
 wavelength_nm    = 1550           # laser wavelength (nm)
 pulse_energy_J = 0.0009 #J - reality checks. Spiral Blue Sapphire 2 has option for 400uJ or 900 uJ. Laser demo used 650 nJ. https://brightsolutions.it/products/ - this is a good supplier of very high power lasers - see microchip and Aero
 half_beam_divergence_rad  = 0.0003   # laser half-angle divergence (rad) this is the desired beam divergence and is used by the gaussian beam model to compute the beam radius at a given range. Set to zero for diffraction limited. Note that Gaussian beam will overwrite this is a beam divergence below the diffraction limit is specified
@@ -40,8 +48,8 @@ aperture_radius  = 0.015
 aperture_area_m2 = np.pi * (aperture_radius ** 2)
 
 
-bandwidth        = 10             # optical bandpass filter width (nm)
-polarity_filter  = 0.1            # fraction of solar light passed by polarisation filter
+bandwidth        = 100             # optical bandpass filter width (nm)
+polarity_filter  = 0.2            # fraction of solar light passed by polarisation filter
 SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM = 0.4  # solar spectral irradiance at 1550 nm (W/m²/nm)
 min_photons_to_detect = 20        # detector threshold — fewer photons means no detection
 min_SNR               = 0.3      # minimum SNR to count as a valid detection - arbitary value - useful for tuning against a datasheet
@@ -108,7 +116,7 @@ def compute_solar_photons(range_m, length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, h
     solar_collected_W = SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM * bandwidth * polarity_filter * R * solid_angle
 
     photon_energy_J  = (PLANCK_CONSTANT * SPEED_OF_LIGHT) / (wavelength_nm * 1e-9)
-    solar_photons    = (solar_collected_W / photon_energy_J) * pulse_width_s
+    solar_photons    = (solar_collected_W / photon_energy_J) * exposure_time
 
     angle_zx, angle_zy, _ = relative_angles(obs_dir, illum_dir)
 
@@ -122,12 +130,12 @@ def compute_solar_photons(range_m, length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, h
     direct_solar_photons = 0
     if abs(angle_zx) > solar_disk_radius or abs(angle_zy) > solar_disk_radius:
         # Sun is on the boresight — full direct irradiance enters the aperture
-        direct_solar_photons = (SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * pulse_width_s
+        direct_solar_photons = (SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * exposure_time
         solar_photons += direct_solar_photons
     elif abs(angle_zx) > FoV or abs(angle_zy) > FoV:
         # Sun is just outside the FoV — linear fall-off from disk edge to FoV boundary
         x = (np.radians(0.265)) / (np.pi - abs(angle_zx))
-        direct_solar_photons = x * (SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * pulse_width_s
+        direct_solar_photons = x * (SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * exposure_time
         solar_photons += direct_solar_photons
 
     return solar_photons, direct_solar_photons
