@@ -1,26 +1,27 @@
 """
 Radar_Performance.py
 
-Radar range equation core plus the radar SNR Monte Carlo simulation.
+Monostatic radar performance: the range equation core plus an SNR Monte Carlo.
 
-Two layers in one module:
+Signal path:
+  Transmit power → monostatic radar equation (G^2, lambda^2, RCS, 1/R^4) → received power Pr.
 
-1. Range equation (single source of truth). The monostatic radar equation is:
-       Pr = Pt * G^2 * lambda^2 * RCS / ((4*pi)^3 * R^4 * L)
-   radar_received_power / radar_solve_transmit_power are the numeric forms and
-   are fast enough to call inside Monte Carlo loops. Multimodal Ranges uses them
-   rather than re-typing the formula. compute_missing_radar is a slower
-   sympy-based helper for solving for an arbitrary unknown; it is not meant for
-   hot loops. Gain_Approx provides a quick gain estimate from beamwidth, clamped
-   to the physical minimum imposed by the aperture diameter.
+Noise path:
+  Radiant flux environment (solar, albedo, earth IR) → target equilibrium
+  temperature via Stefan-Boltzmann → Johnson-Nyquist noise floor P_noise = k*T*B.
 
-2. Monte Carlo SNR simulation (merged in from the former Radar_Sim.py). Each
-   trial draws a random target orientation, range, and spacecraft azimuth. RCS
-   is interpolated from a look-up table (radar_cross_section.py). The noise floor
-   uses the Johnson-Nyquist formula N = k * T * B, with T estimated from the
-   radiant flux environment (solar, albedo, earth IR) via Stefan-Boltzmann.
-   SNR = Pr / N. Detection contours showing P(detection) vs bearing and range
-   are built by binning trials into (angle, range) cells.
+SNR = Pr / P_noise. A minimum detectable received power is also applied — if Pr
+falls below Pr_radar_min, SNR is forced to zero regardless of the ratio.
+
+The module is two layers in one file:
+  1. Range equation (single source of truth). radar_received_power /
+     radar_solve_transmit_power are the numeric forms, fast enough to call inside
+     Monte Carlo loops; Multimodal Ranges uses them rather than re-typing the
+     formula. compute_missing_radar is a slower sympy helper for solving for an
+     arbitrary unknown (not for hot loops). Gain_Approx estimates gain from
+     beamwidth, clamped to the aperture diffraction limit.
+  2. Monte Carlo runner (monte_carlo_SNR) draws random orientations, ranges, and
+     sun geometries to build a statistical picture of detection coverage.
 """
 
 import numpy as np
@@ -29,7 +30,34 @@ import sympy as sp
 import radar_cross_section as rcs
 import radiant_flux
 
+## ── Default system parameters (overridden via function arguments) ──────
+# Physics constants
+k  = 1.38e-23  # Boltzmann constant (J/K)
+sb = 5.6e-8    # Stefan-Boltzmann constant (W/m^2/K^4)
 
+## Transmitter / antenna
+Pt_radar                = 50       # peak transmit power (W)
+radar_gain              = 10       # antenna gain — fixed, or compute via Gain_Approx(FoV, lambda_radar, radar_aperture_diameter)
+lambda_radar            = 0.056    # radar wavelength (m)
+FoV                     = 25       # sensor field of view (deg) — used only if gain is computed from the aperture
+radar_aperture_diameter = 0.3      # antenna aperture diameter (m) — used only if gain is computed from the aperture
+
+# Receiver
+Pr_radar_min = 7.8e-18  # minimum detectable received power (W)
+B            = 1e6      # radar receiver bandwidth (Hz)
+
+# Target properties (default placeholder target; a caller/plugin overrides these)
+DEFAULT_TARGET_CHARACTERISTIC_LENGTH = 5         # physical size of satellite (m) — scales RCS from the reference 6U cubesat to the target
+DEFAULT_ABSORPTION = 1                           # surface solar absorptivity
+DEFAULT_EMISSIVITY = 1                           # surface thermal emissivity
+DEFAULT_AP         = 0.3 * 0.3                   # projected area for solar absorption (m^2)
+DEFAULT_AR         = 0.3 * 0.3                   # radiating area (m^2)
+DEFAULT_AVG_POWER  = 10                          # average spacecraft bus power dissipated as heat (W)
+
+min_SNR = 0.3  # minimum SNR to count as a valid detection - arbitary value - useful for tuning against a datasheet
+
+
+# ══ Range equation core (reusable, no simulation state) ════════════════
 def Gain_Approx(Beamwidth, lamda_radar, aperture_diameter):
     """Estimate antenna gain from beamwidth, clamped to the diffraction-limited minimum.
 
@@ -40,7 +68,7 @@ def Gain_Approx(Beamwidth, lamda_radar, aperture_diameter):
     (1.22 * lambda / D), the physical minimum beamwidth is used instead.
     """
     Beamwidth = np.radians(Beamwidth)
-    if lamda_radar != 0 or aperture_diameter != 0: #this check fails if either vriable has been left blank - sometimes we may not want to constrain the simulation to a given aperture diameter
+    if lamda_radar != 0 or aperture_diameter != 0:  # skip the clamp if either is left blank — sometimes we don't want to constrain to a given aperture
         theoretical_min_beamwidth = 1.22 * lamda_radar / aperture_diameter
         if theoretical_min_beamwidth > Beamwidth:
             # Can't achieve this beamwidth with this aperture — clamp to physical limit
@@ -51,34 +79,29 @@ def Gain_Approx(Beamwidth, lamda_radar, aperture_diameter):
     return Gain
 
 
-# ── Numeric radar equation (single source of truth) ───────────────────
 def radar_received_power(Pt, G, wavelength, rcs, R, L=1.0):
     """Monostatic radar equation, forward form: received power Pr.
 
         Pr = Pt * G^2 * wavelength^2 * RCS / ((4*pi)^3 * R^4 * L)
 
     Plain numeric and numpy-friendly, so it is safe to call per sample inside a
-    Monte Carlo loop. L defaults to 1 (lossless), matching the inline forms it
-    replaces.
+    Monte Carlo loop. L defaults to 1 (lossless).
     """
     return Pt * G**2 * wavelength**2 * rcs / ((4 * np.pi)**3 * R**4 * L)
 
 
 def radar_solve_transmit_power(Pr, G, wavelength, rcs, R, L=1.0):
-    """Invert the radar equation for the transmit power needed to achieve Pr."""
+    """Invert the radar equation for the transmit power Pt needed to achieve Pr."""
     return Pr * (4 * np.pi)**3 * R**4 * L / (G**2 * wavelength**2 * rcs)
 
 
-# ── Symbolic radar equation ───────────────────────────────────────────
-# Defining as sympy symbols allows solve() to find any one unknown given the rest.
-# The Python bindings carry a sym_ prefix so they do not collide with the numeric
-# simulation parameters (Pt_radar, lambda_radar) below; the symbol .name strings
-# stay unchanged so the compute_missing_radar keyword API is unaffected.
+# Symbolic form: defining the equation in sympy lets solve() find any one unknown
+# given the rest. The Python bindings carry a sym_ prefix so they do not collide
+# with the numeric simulation parameters (Pt_radar, lambda_radar) below; the symbol
+# .name strings stay unchanged so the compute_missing_radar keyword API is unaffected.
 sym_Pr, sym_Pt, sym_G, sym_lambda, sym_RCS, sym_R, sym_L = sp.symbols(
     'Pr_radar Pt_radar G_radar lambda_radar RCS_radar R_radar L_radar'
 )
-
-# Monostatic radar range equation (linear power form, not dB)
 eq_radar = sym_Pr - (sym_Pt * sym_G**2 * sym_lambda**2 * sym_RCS) / (
     (4 * sp.pi)**3 * sym_R**4 * sym_L)
 
@@ -105,33 +128,7 @@ def compute_missing_radar(**kwargs):
     return float(sol_real_positive[0])
 
 
-# ── Monte Carlo SNR simulation (merged from the former Radar_Sim.py) ───
-# Simulation parameters
-FoV                     = 25       # sensor field of view (deg)
-Pt_radar                = 50       # peak transmit power (W)
-Pr_radar_min            = 7.8e-18  # minimum detectable received power (W)
-lambda_radar            = 0.056    # radar wavelength (m)
-radar_aperture_diameter = 0.3      # (m)
-avg_power               = 10       # average spacecraft bus power dissipated as heat (W)
-
-# Gain: fixed at 10, or compute from aperture via Gain_Approx(FoV, lambda_radar, radar_aperture_diameter)
-radar_gain = 10
-
-# Target parameters
-absorption   = 1          # surface solar absorptivity
-emmisivity   = 1          # surface thermal emissivity
-Ap           = 0.3 * 0.3  # projected area for solar absorption (m^2)
-Ar           = 0.3 * 0.3  # radiating area (m^2)
-target_characteristic_length = 5  # physical size of satellite (m), used to scale the RCS from the reference 6U cubesat to the target satellite
-
-# Physics constants
-B  = 1e6      # radar receiver bandwidth (Hz)
-k  = 1.38e-23 # Boltzmann constant (J/K)
-sb = 5.6e-8   # Stefan-Boltzmann constant (W/m^2/K^4)
-
-min_SNR = 0.3  # detection threshold
-
-
+# ══ Simulation ═════════════════════════════════════════════════════════
 def get_pointing_from_azimuth(azimuth_deg):
     """Map a spacecraft azimuth angle to one of four orbital quadrants.
 
@@ -149,27 +146,51 @@ def get_pointing_from_azimuth(azimuth_deg):
         return "zenith"
 
 
-def monte_carlo_SNR(max_range, samples):
-    """Run `samples` Monte Carlo trials and return per-trial SNR results.
+def compute_radar_returns(orientation_deg, R, pointing, case, beta):
+    """Return (SNR, Pr, P_noise) for a single radar trial.
 
-    For each trial:
-      1. Draw random target orientation and range.
-      2. Look up RCS at the drawn orientation (interpolated from table).
-      3. Compute received power Pr using the monostatic radar equation.
-      4. Estimate thermal noise temperature T from the radiant flux environment
-         using Stefan-Boltzmann: T = ((S*alpha*Ap + P_bus) / (eps*Ar*sigma))^0.25.
-      5. Compute SNR = Pr / (k * T * B). Set to 0 if Pr < Pr_radar_min.
+    Pr is forced through the detector floor: SNR is zeroed if Pr falls below
+    Pr_radar_min, regardless of the noise level.
+
+      Pr      : received power from the monostatic radar equation (W).
+      P_noise : Johnson-Nyquist thermal noise floor k*T*B (W), where T is the
+                target equilibrium temperature from the radiant flux environment
+                via Stefan-Boltzmann: T = ((S*alpha*Ap + P_bus) / (eps*Ar*sigma))^0.25.
+      SNR     : Pr / P_noise, or 0 below the detection floor.
+    """
+    # RCS scaled from the table's 6U cubesat reference area to the target area
+    target_rcs = rcs.get_rcs_m2(orientation_deg) * DEFAULT_TARGET_CHARACTERISTIC_LENGTH ** 2 / (0.3 * 0.2)
+
+    # Monostatic radar equation for received power
+    Pr = radar_received_power(Pt_radar, radar_gain, lambda_radar, target_rcs, R)
+
+    # Total incident radiant flux (W/m^2) for this orbital geometry
+    S = radiant_flux.get_radiant_flux(case, 500, pointing, beta)
+
+    # Equilibrium temperature from power balance: absorbed flux + bus power = radiated flux
+    T       = ((S * DEFAULT_ABSORPTION * DEFAULT_AP + DEFAULT_AVG_POWER) / (DEFAULT_EMISSIVITY * DEFAULT_AR * sb)) ** 0.25
+    P_noise = k * T * B
+
+    SNR = Pr / P_noise if Pr >= Pr_radar_min else 0  # below minimum detectable signal → no detection
+    return SNR, Pr, P_noise
+
+
+def monte_carlo_SNR(max_range, samples):
+    """Run `samples` Monte Carlo trials with randomised orientation, range, and sun geometry.
+
+    Each trial draws:
+      - Target orientation uniformly in [-180, 180] deg.
+      - Range uniformly in [1, max_range].
+      - Spacecraft azimuth uniformly in [-180, 180] deg, mapped to an orbital quadrant.
+      - Thermal case (hot / cold) and solar beta angle uniformly from their sets.
+
+    Physics is deferred to compute_radar_returns. Returns a list of dicts with
+    per-sample geometry, SNR, and the underlying Pr / P_noise for downstream analysis.
     """
     results = []
     for i in range(samples):
         orientation = np.random.uniform(-180, 180)  # target orientation (deg)
         R           = np.random.uniform(1, max_range)
-
-        # RCS scaled from the table's 6U cubesat reference area to the target area
-        target_rcs = rcs.get_rcs_m2(orientation) * target_characteristic_length ** 2 / (0.3 * 0.2)
-
-        # Monostatic radar equation for received power (single source of truth)
-        Pr = radar_received_power(Pt_radar, radar_gain, lambda_radar, target_rcs, R)
 
         azimuth  = np.random.uniform(-180, 180)
         pointing = get_pointing_from_azimuth(azimuth)
@@ -177,22 +198,15 @@ def monte_carlo_SNR(max_range, samples):
         case = random.choice(["hot", "cold"])   # worst-case hot or cold thermal environment
         beta = random.choice([0, 45, 70, 90])   # solar beta angle (deg)
 
-        # Total incident radiant flux (W/m^2) for this orbital geometry
-        S = radiant_flux.get_radiant_flux(case, 500, pointing, beta)
-
-        # Equilibrium temperature from power balance: absorbed flux + bus power = radiated flux
-        T = ((S * absorption * Ap + avg_power) / (emmisivity * Ar * sb)) ** 0.25
-
-        if Pr < Pr_radar_min:
-            SNR = 0  # below minimum detectable signal
-        else:
-            SNR = Pr / (k * T * B)
+        SNR, Pr, P_noise = compute_radar_returns(orientation, R, pointing, case, beta)
 
         results.append({
             "range_m":     R,
             "azimuth":     np.deg2rad(azimuth),
             "orientation": np.deg2rad(orientation),
-            "SNR":         SNR
+            "SNR":         SNR,
+            "Pr":          Pr,
+            "P_noise":     P_noise,
         })
 
         percentage = 100 * i / samples
@@ -213,7 +227,6 @@ if __name__ == "__main__":
         print(f"plotter called with {len(results)} results")
         sample     = random.sample(results, min(50000, len(results)))
         rand_above = [r for r in sample if r["SNR"] > min_SNR]
-        rand_below = [r for r in sample if r["SNR"] <= min_SNR]
 
         n_angle_bins     = 360
         range_bin_size_m = 1000
@@ -221,9 +234,9 @@ if __name__ == "__main__":
         max_r        = max(r["range_m"] for r in results)
         n_range_bins = int(np.ceil(max_r / range_bin_size_m))
 
-        angle_edges  = np.linspace(-np.pi, np.pi, n_angle_bins + 1)
+        angle_edges   = np.linspace(-np.pi, np.pi, n_angle_bins + 1)
         angle_centres = (angle_edges[:-1] + angle_edges[1:]) / 2
-        range_edges  = np.arange(0, (n_range_bins + 1) * range_bin_size_m, range_bin_size_m)
+        range_edges   = np.arange(0, (n_range_bins + 1) * range_bin_size_m, range_bin_size_m)
 
         counts_total = np.zeros((n_angle_bins, n_range_bins))
         counts_above = np.zeros((n_angle_bins, n_range_bins))
@@ -238,11 +251,10 @@ if __name__ == "__main__":
                 counts_above[a_idx, r_idx] += 1
 
         thresholds = [0.90, 0.50, 0.25, 0.1, 0.05, 0.01]
-        colours = {
-            0.90: "#1a9641", 0.50: "#fdae61",
-            0.25: "#d7191c", 0.10: "#b2182b", 0.05: "#762a83", 0.01: "#2d004b"
-        }
-        # For each angle bin, find the outermost range where P(detection) >= threshold
+        colours = {0.90: "#1a9641", 0.50: "#fdae61", 0.25: "#d7191c",
+                   0.10: "#b2182b", 0.05: "#762a83", 0.01: "#2d004b"}
+
+        # For each angle bin and threshold, find the outermost range where detection probability >= threshold
         threshold_ranges = {t: np.full(n_angle_bins, np.nan) for t in thresholds}
         for a_idx in range(n_angle_bins):
             for t in thresholds:
@@ -268,7 +280,7 @@ if __name__ == "__main__":
             np.deg2rad(0):   "anti-sun",
             np.deg2rad(90):  "nadir",
             np.deg2rad(180): "sun",
-            np.deg2rad(270): "zenith"
+            np.deg2rad(270): "zenith",
         }
         for ax in (ax1, ax2):
             for angle in sector_boundaries:

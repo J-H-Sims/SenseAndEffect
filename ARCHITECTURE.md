@@ -28,11 +28,9 @@ flowchart TB
         RCS[radar_cross_section.py]
         RF[radiant_flux.py]
         RP[Radar_Performance.py]
-        RSim[Radar_Sim.py]
     end
-    RCS -- import as rcs --> RSim
-    RF  -- import        --> RSim
-    RP  -- import as radar --> RSim
+    RCS -- import as rcs --> RP
+    RF  -- import        --> RP
 
     subgraph camera[Camera]
         RPC[RangePrecisionFromCamera.py]
@@ -43,7 +41,7 @@ flowchart TB
     RP -- import as radar --> MMR
 
     classDef entry fill:#1a9641,color:#fff,stroke:#0d5d24;
-    class MMR,RSim,RPC,SPF entry;
+    class MMR,RP,RPC,SPF entry;
 ```
 
 Green nodes are the things you actually run. Everything else is a library imported by something else.
@@ -53,7 +51,7 @@ Green nodes are the things you actually run. Everything else is a library import
 Four scripts are meant to be run directly, plus two modules that double as runnable test harnesses.
 
 - **Multimodal Ranges.py** — the headline trade study. Computes minimum range and required transmit power/energy for flash LiDAR, scanning LiDAR, radar, and camera as a function of field of view, then plots it.
-- **Radar_Sim.py** — standalone radar Monte Carlo. Produces SNR scatter and detection probability contours vs bearing and range.
+- **Radar_Performance.py** — radar range equation core plus the standalone radar Monte Carlo. Run directly, it produces SNR scatter and detection probability contours vs bearing and range; imported, it supplies the radar equation functions.
 - **RangePrecisionFromCamera.py** — standalone camera range precision from pixel count. Self contained, no project imports.
 - **SurfaceParameterFitting.py** — one off preprocessing. Fits the BRDF model to measured reflectance and regenerates `lidar_params.json`. Run this whenever the measured data changes; the LiDAR models read its output.
 - **LiDAR_Performance.py** and **CuboidSolarModel.py** also have `__main__` blocks, so they can be run alone for their own Monte Carlo or plot.
@@ -68,10 +66,9 @@ Four scripts are meant to be run directly, plus two modules that double as runna
 | `CuboidLiDARModel.py` | Monostatic LiDAR return off a cuboid | — | LiDAR_Performance | numpy, json | **opens JSON at import** |
 | `CuboidSolarModel.py` | Bistatic solar reflection off a cuboid | — | LiDAR_Performance | numpy, json, matplotlib | **opens JSON at import** |
 | `LiDAR_Performance.py` | Full LiDAR SNR model + Monte Carlo | CuboidLiDARModel, GaussianBeam, CuboidSolarModel | Multimodal Ranges | numpy, scipy, matplotlib | none past its imports |
-| `radar_cross_section.py` | RCS lookup table, dBsm to m^2, interpolation | — | Radar_Sim | (none) | none |
-| `radiant_flux.py` | Orbital radiant flux lookup table | — | Radar_Sim | (none) | none |
-| `Radar_Performance.py` | Radar range equation numeric core + symbolic solver, gain approx | — | Radar_Sim, Multimodal Ranges | numpy, sympy | defines sympy symbols |
-| `Radar_Sim.py` | Radar SNR Monte Carlo with thermal noise floor | radar_cross_section, radiant_flux, Radar_Performance | — | numpy, scipy, matplotlib | none past its imports |
+| `radar_cross_section.py` | RCS lookup table, dBsm to m^2, interpolation | — | Radar_Performance | (none) | none |
+| `radiant_flux.py` | Orbital radiant flux lookup table | — | Radar_Performance | (none) | none |
+| `Radar_Performance.py` | Radar range equation numeric core + symbolic solver + gain approx, plus radar SNR Monte Carlo with thermal noise floor | radar_cross_section, radiant_flux | Multimodal Ranges | numpy, scipy, sympy, matplotlib | defines sympy symbols |
 | `RangePrecisionFromCamera.py` | Camera range precision from subtended pixels | — | — | numpy, matplotlib | runs calc, shows plot |
 | `Multimodal Ranges.py` | Cross modality FoV trade study | Radar_Performance, LiDAR_Performance | — | numpy, matplotlib | runs study, shows plot |
 

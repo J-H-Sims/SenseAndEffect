@@ -141,18 +141,25 @@ def compute_solar_photons(range_m, length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, h
     return solar_photons, direct_solar_photons
 
 
-def compute_lidar_returns(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y, theta=half_beam_divergence_rad):
+def compute_lidar_returns(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y, theta=half_beam_divergence_rad,
+                          length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT,
+                          face_materials=DEFAULT_FACE_MATERIALS):
     """Return (SNR, photons_per_pulse, reflected_solar_photons_per_pulse, direct_solar_photons).
+
+    Target geometry (length, width, height, face_materials) is taken as input,
+    defaulting to the module DEFAULT_* globals, so the caller (e.g. a spacecraft
+    sim) can pass the actual target instead of the placeholder. Pure and free of
+    side effects — the per-sample solar bookkeeping is the caller's responsibility.
 
     SNR is forced to zero if total detected photons fall below min_photons_to_detect.
     The photon threshold guards against detections with too few photons to be
     statistically reliable regardless of the signal-to-background ratio.
     """
     reflected_solar_photons_per_pulse, direct_solar_photons = compute_solar_photons(
-        range_m, DEFAULT_LENGTH, DEFAULT_WIDTH, DEFAULT_HEIGHT, roll, pitch, yaw, DEFAULT_FACE_MATERIALS, illum_dir, [0, 0, 1], wavelength_nm)
+        range_m, length, width, height, roll, pitch, yaw, face_materials, illum_dir, [0, 0, 1], wavelength_nm)
     photons_per_pulse = compute_photons_p_pulse(
         X, Y, range_m, beam_waist, wavelength_nm, pulse_energy_J, theta,
-        DEFAULT_LENGTH, DEFAULT_WIDTH, DEFAULT_HEIGHT, roll, pitch, yaw, DEFAULT_FACE_MATERIALS)
+        length, width, height, roll, pitch, yaw, face_materials)
 
     SNR = photons_per_pulse / reflected_solar_photons_per_pulse if reflected_solar_photons_per_pulse > 0 else np.inf
 
@@ -160,7 +167,6 @@ def compute_lidar_returns(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, 
     if photons_per_pulse + (reflected_solar_photons_per_pulse - direct_solar_photons) < min_photons_to_detect:
         SNR = 0
 
-    solar_tracker.append({"solar photons": reflected_solar_photons_per_pulse - direct_solar_photons})
     return SNR, photons_per_pulse, reflected_solar_photons_per_pulse, direct_solar_photons
 
 
@@ -252,6 +258,10 @@ def monte_carlo_SNR(max_range = DEFAULT_RANGE_M, pulse_energy_J = pulse_energy_J
 
         SNR, photons_per_pulse, reflected_solar_photons_per_pulse, direct_solar_photons = compute_lidar_returns(
             range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y)
+
+        # Per-sample diffuse solar background, tracked here (not inside compute_lidar_returns,
+        # which is kept side-effect free for reuse as a plugin)
+        solar_tracker.append({"solar photons": reflected_solar_photons_per_pulse - direct_solar_photons})
 
         view_dir = [0, 0, 1]
         angle_zx, angle_zy, _ = relative_angles(view_dir, illum_dir)

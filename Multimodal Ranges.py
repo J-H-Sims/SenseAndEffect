@@ -27,6 +27,7 @@ radar_Pt       = np.zeros(n)  # radar peak transmit power (W)
 ss_lidar_Pe    = np.zeros(n)  # flash LiDAR pulse energy (J)
 scan_lidar_Pt  = np.zeros(n)  # scanning LiDAR average power (W)
 scan_lidar_Pe  = np.zeros(n)  # scanning LiDAR pulse energy (J)
+The_Sun        = np.zeros(n)  # solar power across the scan surface (W), for reference
 camera_FoV_per_px = np.zeros(n)
 camera_H_Res   = np.zeros(n)
 radar_P        = np.zeros(n)  # radar average power (W)
@@ -47,9 +48,10 @@ for i in range(n):
     radar_gain = radar.Gain_Approx(FoV, lambda_radar, radar_aperture_diameter)
     Pr_radar   = 0.9E-15   # minimum detectable received power (W)
     RCS_radar  = 20        # target radar cross-section (m^2)
+    L_radar    = 1         # system loss factor
 
-    # Solve radar range equation for peak transmit power (shared core in Radar_Performance)
-    radar_Pt[i] = radar.radar_solve_transmit_power(Pr_radar, radar_gain, lambda_radar, RCS_radar, R)
+    # Solve radar range equation for the peak transmit power needed to reach Pr_radar at range R
+    radar_Pt[i] = radar.radar_solve_transmit_power(Pr_radar, radar_gain, lambda_radar, RCS_radar, R, L_radar)
 
     # Average power = peak power × pulse duration × scan rate (energy per unit time)
     radar_P[i] = radar_Pt[i] * pulse_duration * area_scan_rate
@@ -70,6 +72,10 @@ for i in range(n):
     scan_lidar_Pe[i] = lidar.compute_pulse_energy(R, spot_divergence_rad)
     scan_lidar_Pt[i] = scan_lidar_Pe[i] * polling_rate  # average power = energy × pulse rate
 
+    ss_lidar_Pe[i] = lidar.compute_pulse_energy(R, divergence_rad) * area_scan_rate
+
+    The_Sun[i] = 1380 * scan_surface_area  # solar constant × solid scan area (W), reference only
+
     # ── Camera ────────────────────────────────────────────────────────
     pixel_fill_req = 0.5  # fraction of target that must be covered by a pixel for detection
 
@@ -77,57 +83,57 @@ for i in range(n):
     camera_FoV_per_px[i] = np.degrees(np.atan((1**0.5) / R)) / pixel_fill_req
     camera_H_Res[i]      = FoV / camera_FoV_per_px[i]
 
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
 
-import matplotlib.pyplot as plt
+    fig, (ax1, ax3) = plt.subplots(2, 1, sharex=True)
 
-fig, (ax1, ax3) = plt.subplots(2, 1, sharex=True)
+    # ── Top plot: minimum range and transmit power vs FoV ─────────────────
+    l1, = ax1.plot(Sensor_FoV, Minimum_Range, color="black", label="Minimum Range")
+    ax1.set_ylabel("Minimum Range (m)")
+    ax1.grid(True)
 
-# ── Top plot: minimum range and transmit power vs FoV ─────────────────
-l1, = ax1.plot(Sensor_FoV, Minimum_Range, color="black", label="Minimum Range")
-ax1.set_ylabel("Minimum Range (m)")
-ax1.grid(True)
+    ax2 = ax1.twinx()
+    l2, = ax2.plot(Sensor_FoV, ss_lidar_Pe,    linestyle="--", label="Flash LiDAR Pulse Energy")
+    l3, = ax2.plot(Sensor_FoV, radar_Pt,       linestyle="--", label="Radar Transmit Power")
+    l4, = ax2.plot(Sensor_FoV, scan_lidar_Pt,                  label="Scan Lidar avg Power")
+    l6, = ax2.plot(Sensor_FoV, radar_P,                        label="Radar avg Power")
+    l7, = ax2.plot(Sensor_FoV, scan_lidar_Pe,  linestyle="--", label="Scan Lidar Pulse Energy")
+    ax2.set_ylabel("Transmit Power")
+    ax2.set_yscale("log")
 
-ax2 = ax1.twinx()
-l2, = ax2.plot(Sensor_FoV, ss_lidar_Pe,    linestyle="--", label="Flash LiDAR Pulse Energy")
-l3, = ax2.plot(Sensor_FoV, radar_Pt,       linestyle="--", label="Radar Transmit Power")
-l4, = ax2.plot(Sensor_FoV, scan_lidar_Pt,                  label="Scan Lidar avg Power")
-l6, = ax2.plot(Sensor_FoV, radar_P,                        label="Radar avg Power")
-l7, = ax2.plot(Sensor_FoV, scan_lidar_Pe,  linestyle="--", label="Scan Lidar Pulse Energy")
-ax2.set_ylabel("Transmit Power")
-ax2.set_yscale("log")
+    lines  = [l1, l2, l3, l4, l6, l7]
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc="best")
+    ax1.set_ylim(bottom=0, top=400000)
+    ax2.set_ylim(top=1000000)
 
-lines  = [l1, l2, l3, l4, l6, l7]
-labels = [l.get_label() for l in lines]
-ax1.legend(lines, labels, loc="best")
-ax1.set_ylim(bottom=0, top=400000)
-ax2.set_ylim(top=1000000)
+    # ── Bottom plot: camera angular resolution and pixel count vs FoV ──────
+    l8, = ax3.plot(Sensor_FoV, camera_FoV_per_px, color="purple", label="Camera FoV per pixel")
+    ax3.set_ylabel("Camera FoV per pixel (deg)")
+    ax3.set_xlabel("Sensor Field of View (deg)")
+    ax3.grid(True)
 
-# ── Bottom plot: camera angular resolution and pixel count vs FoV ──────
-l8, = ax3.plot(Sensor_FoV, camera_FoV_per_px, color="purple", label="Camera FoV per pixel")
-ax3.set_ylabel("Camera FoV per pixel (deg)")
-ax3.set_xlabel("Sensor Field of View (deg)")
-ax3.grid(True)
+    # Reference lines for known sensor products
+    ax3.axhline(0.00048 / pixel_fill_req, linestyle="--")
+    ax3.text(175,  0.00048 / pixel_fill_req, " CAVU",            va="bottom", ha="right")
+    ax3.axhline(0.0002  / pixel_fill_req, linestyle="--")
+    ax3.text(160,  0.0002  / pixel_fill_req, " SOP 200",         va="bottom", ha="right")
+    ax3.axhline(0.00013 / pixel_fill_req, linestyle="--")
+    ax3.text(150,  0.00013 / pixel_fill_req, " HEO Adler",       va="top",    ha="right")
+    ax3.axhline(0.00137 / pixel_fill_req, linestyle="--")
+    ax3.text(175,  0.00137 / pixel_fill_req, " Blackfly FL 100mm", va="bottom", ha="right")
+    ax3.axhline(0.02, linestyle="--", color="red")
 
-# Reference lines for known sensor products
-ax3.axhline(0.00048 / pixel_fill_req, linestyle="--")
-ax3.text(175,  0.00048 / pixel_fill_req, " CAVU",            va="bottom", ha="right")
-ax3.axhline(0.0002  / pixel_fill_req, linestyle="--")
-ax3.text(160,  0.0002  / pixel_fill_req, " SOP 200",         va="bottom", ha="right")
-ax3.axhline(0.00013 / pixel_fill_req, linestyle="--")
-ax3.text(150,  0.00013 / pixel_fill_req, " HEO Adler",       va="top",    ha="right")
-ax3.axhline(0.00137 / pixel_fill_req, linestyle="--")
-ax3.text(175,  0.00137 / pixel_fill_req, " Blackfly FL 100mm", va="bottom", ha="right")
-ax3.axhline(0.02, linestyle="--", color="red")
+    ax3.set_ylabel("Camera FoV per pixel (deg)")
+    ax4 = ax3.twinx()
+    l9, = ax4.plot(Sensor_FoV, camera_H_Res, color="green", linestyle="-.", label="Camera Horizontal Resolution")
+    ax4.set_ylabel("Camera Horizontal Resolution (px)")
+    lines  = [l8, l9]
+    labels = [l.get_label() for l in lines]
+    ax3.legend(lines, labels, loc="best")
 
-ax3.set_ylabel("Camera FoV per pixel (deg)")
-ax4 = ax3.twinx()
-l9, = ax4.plot(Sensor_FoV, camera_H_Res, color="green", linestyle="-.", label="Camera Horizontal Resolution")
-ax4.set_ylabel("Camera Horizontal Resolution (px)")
-lines  = [l8, l9]
-labels = [l.get_label() for l in lines]
-ax3.legend(lines, labels, loc="best")
-
-plt.suptitle("Sensor FoV Trade vs Minimum Range and Required Transmit Energy")
-ax4.set_ylim(bottom=0, top=10000)
-ax3.set_ylim(bottom=0, top=0.01)
-plt.show()
+    plt.suptitle("Sensor FoV Trade vs Minimum Range and Required Transmit Energy")
+    ax4.set_ylim(bottom=0, top=10000)
+    ax3.set_ylim(bottom=0, top=0.01)
+    plt.show()
