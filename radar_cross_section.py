@@ -6,6 +6,10 @@ RCS look-up table for a representative target at 5-degree azimuth intervals.
 Values are in dBsm (decibels relative to 1 m^2). Azimuths cover -180 to 180 deg.
 get_rcs_m2 is the primary interface: it returns the linearly interpolated RCS in m^2
 for any continuous azimuth angle in that range.
+
+Data source: https://amostech.com/TechnicalPapers/2024/Poster/Mayne.pdf
+
+This draws on DSTL RCS analysis of  6U cubesat
 """
 
 
@@ -38,6 +42,7 @@ def get_rcs_dBsm(azimuth):
         return data[azimuth]
 
     # Linear interpolation between the two nearest table entries
+    import math
     keys = sorted(data.keys())
     for i in range(len(keys) - 1):
         a0, a1 = keys[i], keys[i + 1]

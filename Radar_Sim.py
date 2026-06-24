@@ -18,18 +18,16 @@ import numpy as np
 import random
 import radar_cross_section as rcs
 import radiant_flux
-import Radar_Performance as radar
 
 # ── Simulation parameters ─────────────────────────────────────────────
-FoV                  = 25       # sensor field of view (deg) — inactive while gain is hardcoded; only used by Gain_Approx
+FoV                  = 25       # sensor field of view (deg)
 Pt_radar             = 50       # peak transmit power (W)
 Pr_radar_min         = 7.8e-18  # minimum detectable received power (W)
 lambda_radar         = 0.056    # radar wavelength (m)
-radar_aperture_diameter = 0.3   # (m) — inactive while gain is hardcoded; only used by Gain_Approx
+radar_aperture_diameter = 0.3   # (m)
 avg_power            = 10       # average spacecraft bus power dissipated as heat (W)
 
-# Gain hardcoded to 10. To derive it from FoV/aperture/wavelength instead, replace with:
-#   radar_gain = radar.Gain_Approx(FoV, lambda_radar, radar_aperture_diameter)
+# Gain: set to 10 or uncomment the line below to compute from aperture
 radar_gain = 10
 print(radar_gain)
 
@@ -45,8 +43,7 @@ k  = 1.38e-23 # Boltzmann constant (J/K)
 sb = 5.6e-8   # Stefan-Boltzmann constant (W/m^2/K^4)
 
 min_SNR = 0.3  # detection threshold
-
-
+target_characteristic_length = 5 #physical size of satellite, in meters, used to scale the RCS from the reference 6U cubesat to the target satellite
 def get_pointing_from_azimuth(azimuth_deg):
     """Map a spacecraft azimuth angle to one of four orbital quadrants.
 
@@ -80,11 +77,11 @@ def monte_carlo_SNR(max_range, samples):
         orientation = np.random.uniform(-180, 180)  # target orientation (deg)
         R           = np.random.uniform(1, max_range)
 
-        # RCS scaled by a geometric factor (16*5) to convert from the table's reference area
-        target_rcs = rcs.get_rcs_m2(orientation) * 16 * 5
+        # RCS scaled by a geometric factor (16) to convert from the table's reference area
+        target_rcs = rcs.get_rcs_m2(orientation) * target_characteristic_length ** 2 / (0.3 * 0.2)  # scale data from 6U cubesat reference area to target area
 
-        # Monostatic radar equation for received power (shared core in Radar_Performance)
-        Pr = radar.radar_received_power(Pt_radar, radar_gain, lambda_radar, target_rcs, R)
+        # Monostatic radar equation for received power
+        Pr = Pt_radar * radar_gain**2 * lambda_radar**2 * target_rcs / ((4 * np.pi)**3 * R**4)
 
         azimuth = np.random.uniform(-180, 180)
         pointing = get_pointing_from_azimuth(azimuth)
@@ -128,6 +125,7 @@ if __name__ == "__main__":
         print(f"plotter called with {len(results)} results")
         sample     = random.sample(results, min(50000, len(results)))
         rand_above = [r for r in sample if r["SNR"] > min_SNR]
+        rand_below = [r for r in sample if r["SNR"] <= min_SNR]
 
         n_angle_bins     = 360
         range_bin_size_m = 1000

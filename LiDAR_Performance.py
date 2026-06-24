@@ -25,40 +25,43 @@ import GaussianBeam as Gbeam
 import CuboidSolarModel as solar
 
 solar_tracker = []  # accumulates per-sample background photon counts for later plotting
-
-# ── Default system parameters (overridden via function arguments) ──────
-aperture_radius  = 0.015
-aperture_area_m2 = np.pi * (aperture_radius ** 2)
-pulse_width_s    = 10e-9          # integration window (s)
-wavelength_nm    = 1550           # laser wavelength (nm)
-
 PLANCK_CONSTANT  = 6.62607015e-34
 SPEED_OF_LIGHT   = 299792458
+## ── Default system parameters (overridden via function arguments) ──────
+## Laser beam properties
+pulse_width_s    = 10e-9          # length of pulse - this impacts the SNR as longer pulses will include more sunlight photons
+wavelength_nm    = 1550           # laser wavelength (nm)
+pulse_energy_J = 0.0009 #J - reality checks. Spiral Blue Sapphire 2 has option for 400uJ or 900 uJ. Laser demo used 650 nJ. https://brightsolutions.it/products/ - this is a good supplier of very high power lasers - see microchip and Aero
+half_beam_divergence_rad  = 0.0003   # laser half-angle divergence (rad) this is the desired beam divergence and is used by the gaussian beam model to compute the beam radius at a given range. Set to zero for diffraction limited. Note that Gaussian beam will overwrite this is a beam divergence below the diffraction limit is specified
+beam_waist   = 0.001    # beam waist at focus (m)- a wider beam will have a larger beam waist and will diverge less quickly. This is used by the gaussian beam model to compute the beam radius at a given range. Set to zero for diffraction limited. Note that Gaussian beam will overwrite this is a beam waist below the diffraction limit is specified
+
+#Reciever Properties
+aperture_radius  = 0.015
+aperture_area_m2 = np.pi * (aperture_radius ** 2)
+
+
 bandwidth        = 10             # optical bandpass filter width (nm)
 polarity_filter  = 0.1            # fraction of solar light passed by polarisation filter
-
+SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM = 0.4  # solar spectral irradiance at 1550 nm (W/m²/nm)
 min_photons_to_detect = 20        # detector threshold — fewer photons means no detection
-min_SNR               = 0.3      # minimum SNR to count as a valid detection
+min_SNR               = 0.3      # minimum SNR to count as a valid detection - arbitary value - useful for tuning against a datasheet
 
-# ── Default target geometry and materials ─────────────────────────────
-length1 = 0.1
-width1  = 0.1
-height1 = 0.1
-roll1   = 45
-pitch1  = 45
-yaw1    = 45
-face_materials1 = ["Lambertian 20%"] * 6
+#Target properties
+DEFAULT_LENGTH = 0.1 #m
+DEFAULT_WIDTH  = 0.1 #m
+DEFAULT_HEIGHT = 0.1 #m
+DEFAULT_ROLL   = np.radians(45)  #rad
+DEFAULT_PITCH  = np.radians(45)  #rad
+DEFAULT_YAW    = np.radians(45)  #rad
+DEFAULT_FACE_MATERIALS = ["Lambertian 20%"] * 6 # drawn from the material parameter JSON. the 20% lambertian is from the SBIR requirement
 
-range_m      = 10000
-pulse_energy = 0.0009
-pulse_energy_J = pulse_energy
-theta_user1  = 0.0003   # laser half-angle divergence (rad)
-beam_waist   = 0.001    # beam waist at focus (m)
+#Scene Properties
+DEFAULT_RANGE_M = 10000 #m
 
 
-def compute_photons_p_pulse(X=0, Y=0, z=10000, w0=0.001, wavelength=wavelength_nm, P_total=0.001, theta_user=0,
-                             length=length1, width=width1, height=height1,
-                             roll=roll1, pitch=pitch1, yaw=yaw1, face_materials=face_materials1):
+def compute_photons_p_pulse(X=0, Y=0, z=DEFAULT_RANGE_M, w0=0.001, wavelength=wavelength_nm, P_total=0.001, theta_user=0,
+                             length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT,
+                             roll=DEFAULT_ROLL, pitch=DEFAULT_PITCH, yaw=DEFAULT_YAW, face_materials=DEFAULT_FACE_MATERIALS):
     """Return signal photons collected per pulse.
 
     Uses the Gaussian beam irradiance at (X, Y, z) as the incident flux, then
@@ -82,9 +85,9 @@ def compute_photons_p_pulse(X=0, Y=0, z=10000, w0=0.001, wavelength=wavelength_n
     return photons_per_pulse
 
 
-def compute_solar_photons(range_m, length=length1, width=width1, height=height1,
-                           roll=roll1, pitch=pitch1, yaw=yaw1, face_materials=face_materials1,
-                           illum_dir=[0, 0, 1], obs_dir=[0, 0, 1]):
+def compute_solar_photons(range_m, length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT,
+                           roll=DEFAULT_ROLL, pitch=DEFAULT_PITCH, yaw=DEFAULT_YAW, face_materials=DEFAULT_FACE_MATERIALS,
+                           illum_dir=[0, 0, 1], obs_dir=[0, 0, 1], wavelength_nm=wavelength_nm):
     """Return (total_solar_photons, direct_glare_photons) per pulse.
 
     Background has two components:
@@ -102,17 +105,15 @@ def compute_solar_photons(range_m, length=length1, width=width1, height=height1,
     solid_angle = aperture_area_m2 / range_m**2
 
     # Diffuse solar background: solar spectral irradiance × bandwidth × polarisation filter × BRDF × solid angle
-    solar_received_intensity = 0.4 * bandwidth * polarity_filter * R * solid_angle
-    solar_collected_W        = solar_received_intensity
+    solar_collected_W = SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM * bandwidth * polarity_filter * R * solid_angle
 
     photon_energy_J  = (PLANCK_CONSTANT * SPEED_OF_LIGHT) / (wavelength_nm * 1e-9)
     solar_photons    = (solar_collected_W / photon_energy_J) * pulse_width_s
 
-    view_dir = obs_dir
-    angle_zx, angle_zy, _ = relative_angles(view_dir, illum_dir)
+    angle_zx, angle_zy, _ = relative_angles(obs_dir, illum_dir)
 
     # FoV angle outside which the sun causes direct glare; clamped to 5 deg minimum
-    FoV = np.pi - max(theta_user1 / 2, np.radians(5))
+    FoV = np.pi - max(half_beam_divergence_rad / 2, np.radians(5))
     # Angular radius of the solar disk (0.265 deg half-angle)
     solar_disk_radius = np.pi - np.radians(0.265)
 
@@ -121,53 +122,57 @@ def compute_solar_photons(range_m, length=length1, width=width1, height=height1,
     direct_solar_photons = 0
     if abs(angle_zx) > solar_disk_radius or abs(angle_zy) > solar_disk_radius:
         # Sun is on the boresight — full direct irradiance enters the aperture
-        direct_solar_photons = (0.4 * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * pulse_width_s
+        direct_solar_photons = (SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * pulse_width_s
         solar_photons += direct_solar_photons
     elif abs(angle_zx) > FoV or abs(angle_zy) > FoV:
         # Sun is just outside the FoV — linear fall-off from disk edge to FoV boundary
         x = (np.radians(0.265)) / (np.pi - abs(angle_zx))
-        direct_solar_photons = x * (0.4 * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * pulse_width_s
+        direct_solar_photons = x * (SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM * bandwidth * polarity_filter * aperture_area_m2 / photon_energy_J) * pulse_width_s
         solar_photons += direct_solar_photons
 
     return solar_photons, direct_solar_photons
 
 
-def compute_SNR(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y, theta=theta_user1):
-    """Return SNR for a single scenario, forcing zero if below the photon-count threshold.
+def compute_lidar_returns(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y, theta=half_beam_divergence_rad):
+    """Return (SNR, photons_per_pulse, reflected_solar_photons_per_pulse, direct_solar_photons).
 
+    SNR is forced to zero if total detected photons fall below min_photons_to_detect.
     The photon threshold guards against detections with too few photons to be
     statistically reliable regardless of the signal-to-background ratio.
     """
     reflected_solar_photons_per_pulse, direct_solar_photons = compute_solar_photons(
-        range_m, length1, width1, height1, roll, pitch, yaw, face_materials1, illum_dir, [0, 0, 1])
+        range_m, DEFAULT_LENGTH, DEFAULT_WIDTH, DEFAULT_HEIGHT, roll, pitch, yaw, DEFAULT_FACE_MATERIALS, illum_dir, [0, 0, 1], wavelength_nm)
     photons_per_pulse = compute_photons_p_pulse(
         X, Y, range_m, beam_waist, wavelength_nm, pulse_energy_J, theta,
-        length1, width1, height1, roll, pitch, yaw, face_materials1)
+        DEFAULT_LENGTH, DEFAULT_WIDTH, DEFAULT_HEIGHT, roll, pitch, yaw, DEFAULT_FACE_MATERIALS)
 
-    SNR = photons_per_pulse / reflected_solar_photons_per_pulse
+    SNR = photons_per_pulse / reflected_solar_photons_per_pulse if reflected_solar_photons_per_pulse > 0 else np.inf
 
     # Zero SNR if total photons (signal + diffuse background) is below detector threshold
     if photons_per_pulse + (reflected_solar_photons_per_pulse - direct_solar_photons) < min_photons_to_detect:
         SNR = 0
 
     solar_tracker.append({"solar photons": reflected_solar_photons_per_pulse - direct_solar_photons})
-    return SNR
+    return SNR, photons_per_pulse, reflected_solar_photons_per_pulse, direct_solar_photons
 
 
-def compute_range(pulse_energy_J, theta=theta_user1):
+def compute_range(pulse_energy_J, theta=half_beam_divergence_rad):
     """Step-search for maximum detection range by incrementing range until SNR < min_SNR."""
-    range = 1000
-    SNR   = compute_SNR(range, pulse_energy_J, roll1, pitch1, yaw1, [0, 0, 1], 0, 0, theta)
-    dr    = 100
+    range_m = 1000
+    SNR, *_ = compute_lidar_returns(range_m, pulse_energy_J, DEFAULT_ROLL, DEFAULT_PITCH, DEFAULT_YAW, [0, 0, 1], 0, 0, theta)
+    dr      = 100
+
+    if SNR <= min_SNR:
+        return 0
 
     while SNR > min_SNR:
-        range += dr
-        SNR    = compute_SNR(range, pulse_energy_J, roll1, pitch1, yaw1, [0, 0, 1], 0, 0, theta)
+        range_m += dr
+        SNR, *_ = compute_lidar_returns(range_m, pulse_energy_J, DEFAULT_ROLL, DEFAULT_PITCH, DEFAULT_YAW, [0, 0, 1], 0, 0, theta)
 
-    return range
+    return range_m
 
 
-def compute_pulse_energy(range, theta=theta_user1):
+def compute_pulse_energy(range, theta=half_beam_divergence_rad):
     """Descend from a very large pulse energy until SNR falls to min_SNR.
 
     The descent uses a fractional step (0.5% per iteration) so it converges
@@ -177,12 +182,12 @@ def compute_pulse_energy(range, theta=theta_user1):
     pulse_energy_J = 10000000000000  # start absurdly high to guarantee SNR > min_SNR
     illum_dir = np.array([0, 0, 1])
 
-    SNR = compute_SNR(range, pulse_energy_J, roll1, pitch1, yaw1, illum_dir, 0, 0, theta)
+    SNR, *_ = compute_lidar_returns(range, pulse_energy_J, DEFAULT_ROLL, DEFAULT_PITCH, DEFAULT_YAW, illum_dir, 0, 0, theta)
 
     while SNR > min_SNR:
         dE             = pulse_energy_J * 0.005
         pulse_energy_J -= dE
-        SNR            = compute_SNR(range, pulse_energy_J, roll1, pitch1, yaw1, illum_dir, 0, 0, theta)
+        SNR, *_        = compute_lidar_returns(range, pulse_energy_J, DEFAULT_ROLL, DEFAULT_PITCH, DEFAULT_YAW, illum_dir, 0, 0, theta)
 
     return pulse_energy_J
 
@@ -199,7 +204,9 @@ def relative_angles(view_dir, illum_dir):
     return angle_zx, angle_zy, angle_xy
 
 
-def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
+
+
+def monte_carlo_SNR(max_range = DEFAULT_RANGE_M, pulse_energy_J = pulse_energy_J, n_samples=1000):
     """Run n_samples Monte Carlo trials with randomised orientation, range, and sun direction.
 
     Each trial draws:
@@ -210,9 +217,9 @@ def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
 
     Returns a list of dicts with per-sample geometry and SNR for downstream analysis.
     """
+    solar_tracker.clear()
     results = []
     n = 0
-    print(n)
 
     for _ in range(n_samples):
         n += 1
@@ -222,7 +229,7 @@ def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
 
         range_m = np.random.uniform(0, max_range)
         # Cartesian pointing error scales with range and half-angle
-        avg_pointing_accuracy_cartesian = (range_m / 2) * np.tan(theta_user1 / 2)
+        avg_pointing_accuracy_cartesian = (range_m / 2) * np.tan(half_beam_divergence_rad / 2)
         X, Y = (np.random.uniform(-avg_pointing_accuracy_cartesian, avg_pointing_accuracy_cartesian),
                 np.random.uniform(-avg_pointing_accuracy_cartesian, avg_pointing_accuracy_cartesian))
 
@@ -235,20 +242,24 @@ def monte_carlo_SNR(max_range, pulse_energy_J, n_samples=1000):
             np.sin(elevation)
         ])
 
-        SNR = compute_SNR(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y)
+        SNR, photons_per_pulse, reflected_solar_photons_per_pulse, direct_solar_photons = compute_lidar_returns(
+            range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y)
 
         view_dir = [0, 0, 1]
         angle_zx, angle_zy, _ = relative_angles(view_dir, illum_dir)
 
         results.append({
-            "range_m":      range_m,
-            "roll":         roll,
-            "pitch":        pitch,
-            "yaw":          yaw,
-            "angle_zx":     angle_zx,
-            "angle_zy":     angle_zy,
-            "pulse_energy": pulse_energy_J,
-            "SNR":          SNR
+            "range_m":                       range_m,
+            "roll":                          roll,
+            "pitch":                         pitch,
+            "yaw":                           yaw,
+            "angle_zx":                      angle_zx,
+            "angle_zy":                      angle_zy,
+            "pulse_energy":                  pulse_energy_J,
+            "SNR":                           SNR,
+            "photons_per_pulse":             photons_per_pulse,
+            "reflected_solar_photons":       reflected_solar_photons_per_pulse,
+            "direct_solar_photons":          direct_solar_photons,
         })
 
         percentage = 100 * n / n_samples
