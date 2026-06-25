@@ -23,6 +23,7 @@ import numpy as np
 import CuboidLiDARModel as target
 import GaussianBeam as Gbeam
 import CuboidSolarModel as solar
+import target_definition as tgt   # shared target geometry, orientation, and frame convention
 
 solar_tracker = []  # accumulates per-sample background photon counts for later plotting
 PLANCK_CONSTANT  = 6.62607015e-34
@@ -54,14 +55,8 @@ SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM = 0.4  # solar spectral irradiance at 1550 nm 
 min_photons_to_detect = 20        # detector threshold — fewer photons means no detection
 min_SNR               = 0.3      # minimum SNR to count as a valid detection - arbitary value - useful for tuning against a datasheet
 
-#Target properties
-DEFAULT_LENGTH = 0.1 #m
-DEFAULT_WIDTH  = 0.1 #m
-DEFAULT_HEIGHT = 0.1 #m
-DEFAULT_ROLL   = np.radians(45)  #rad
-DEFAULT_PITCH  = np.radians(45)  #rad
-DEFAULT_YAW    = np.radians(45)  #rad
-DEFAULT_FACE_MATERIALS = ["Lambertian 20%"] * 6 # drawn from the material parameter JSON. the 20% lambertian is from the SBIR requirement
+#Target properties — see target_definition.py (shared with the radar model):
+#  tgt.tgt.DEFAULT_LENGTH / WIDTH / HEIGHT, tgt.tgt.DEFAULT_ROLL / PITCH / YAW, tgt.tgt.DEFAULT_FACE_MATERIALS
 
 #Scene Properties
 DEFAULT_RANGE_M = 10000 #m
@@ -73,10 +68,9 @@ _CONFIG_KEYS = {
     "range_resolution", "wavelength_nm", "pulse_energy_J", "half_beam_divergence_rad",
     "beam_waist", "aperture_radius", "bandwidth", "polarity_filter",
     "SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM", "min_photons_to_detect", "min_SNR",
-    "DEFAULT_LENGTH", "DEFAULT_WIDTH", "DEFAULT_HEIGHT",
-    "DEFAULT_ROLL", "DEFAULT_PITCH", "DEFAULT_YAW",
-    "DEFAULT_FACE_MATERIALS", "DEFAULT_RANGE_M",
+    "DEFAULT_RANGE_M",
 }
+# Target geometry/orientation is shared; configure it via target_definition.configure().
 
 
 def configure(**overrides):
@@ -100,9 +94,38 @@ def configure(**overrides):
     return {key: globals()[key] for key in _CONFIG_KEYS}
 
 
+# Named sensor presets — apply with configure_preset(name) or configure(**PRESETS[name]).
+PRESETS = {
+    # Spiral Blue Sapphire 2 LiDAR — full snapshot of the current module configuration
+    "Sapphire 2": {
+        # Laser
+        "pulse_energy_J":           0.0009,   # J (900 uJ option)
+        "wavelength_nm":            1550,     # nm
+        "half_beam_divergence_rad": 0.0003,   # rad
+        "beam_waist":               0.001,    # m
+        # Receiver / optics
+        "aperture_radius":          0.015,    # m
+        "bandwidth":                100,      # nm optical bandpass
+        "polarity_filter":          0.2,      # fraction passed
+        "range_resolution":         100,      # m (sets the background exposure gate)
+        "SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM": 0.4,  # W/m^2/nm
+        # Detection
+        "min_photons_to_detect":    20,       # count
+        "min_SNR":                  0.3,      # ratio
+    },
+}
+
+
+def configure_preset(name):
+    """Apply a named sensor preset from PRESETS via configure()."""
+    if name not in PRESETS:
+        raise KeyError(f"Unknown preset {name!r}; available: {sorted(PRESETS)}")
+    return configure(**PRESETS[name])
+
+
 def compute_photons_p_pulse(X=0, Y=0, z=DEFAULT_RANGE_M, w0=0.001, wavelength=wavelength_nm, P_total=0.001, theta_user=0,
-                             length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT,
-                             roll=DEFAULT_ROLL, pitch=DEFAULT_PITCH, yaw=DEFAULT_YAW, face_materials=DEFAULT_FACE_MATERIALS):
+                             length=tgt.DEFAULT_LENGTH, width=tgt.DEFAULT_WIDTH, height=tgt.DEFAULT_HEIGHT,
+                             roll=tgt.DEFAULT_ROLL, pitch=tgt.DEFAULT_PITCH, yaw=tgt.DEFAULT_YAW, face_materials=tgt.DEFAULT_FACE_MATERIALS):
     """Return signal photons collected per pulse.
 
     Uses the Gaussian beam irradiance at (X, Y, z) as the incident flux, then
@@ -126,8 +149,8 @@ def compute_photons_p_pulse(X=0, Y=0, z=DEFAULT_RANGE_M, w0=0.001, wavelength=wa
     return photons_per_pulse
 
 
-def compute_solar_photons(range_m, length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT,
-                           roll=DEFAULT_ROLL, pitch=DEFAULT_PITCH, yaw=DEFAULT_YAW, face_materials=DEFAULT_FACE_MATERIALS,
+def compute_solar_photons(range_m, length=tgt.DEFAULT_LENGTH, width=tgt.DEFAULT_WIDTH, height=tgt.DEFAULT_HEIGHT,
+                           roll=tgt.DEFAULT_ROLL, pitch=tgt.DEFAULT_PITCH, yaw=tgt.DEFAULT_YAW, face_materials=tgt.DEFAULT_FACE_MATERIALS,
                            illum_dir=[0, 0, 1], obs_dir=[0, 0, 1], wavelength_nm=wavelength_nm):
     """Return (total_solar_photons, direct_glare_photons) per pulse.
 
@@ -190,10 +213,10 @@ def compute_lidar_returns(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, 
     statistically reliable regardless of the signal-to-background ratio.
     """
     if theta is None:          theta = half_beam_divergence_rad
-    if length is None:         length = DEFAULT_LENGTH
-    if width is None:          width = DEFAULT_WIDTH
-    if height is None:         height = DEFAULT_HEIGHT
-    if face_materials is None: face_materials = DEFAULT_FACE_MATERIALS
+    if length is None:         length = tgt.DEFAULT_LENGTH
+    if width is None:          width = tgt.DEFAULT_WIDTH
+    if height is None:         height = tgt.DEFAULT_HEIGHT
+    if face_materials is None: face_materials = tgt.DEFAULT_FACE_MATERIALS
 
     reflected_solar_photons_per_pulse, direct_solar_photons = compute_solar_photons(
         range_m, length, width, height, roll, pitch, yaw, face_materials, illum_dir, [0, 0, 1], wavelength_nm)
@@ -213,7 +236,7 @@ def compute_lidar_returns(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, 
 def compute_range(pulse_energy_J, theta=half_beam_divergence_rad):
     """Step-search for maximum detection range by incrementing range until SNR < min_SNR."""
     range_m = 1000
-    SNR, *_ = compute_lidar_returns(range_m, pulse_energy_J, DEFAULT_ROLL, DEFAULT_PITCH, DEFAULT_YAW, [0, 0, 1], 0, 0, theta)
+    SNR, *_ = compute_lidar_returns(range_m, pulse_energy_J, tgt.DEFAULT_ROLL, tgt.DEFAULT_PITCH, tgt.DEFAULT_YAW, [0, 0, 1], 0, 0, theta)
     dr      = 100
 
     if SNR <= min_SNR:
@@ -221,7 +244,7 @@ def compute_range(pulse_energy_J, theta=half_beam_divergence_rad):
 
     while SNR > min_SNR:
         range_m += dr
-        SNR, *_ = compute_lidar_returns(range_m, pulse_energy_J, DEFAULT_ROLL, DEFAULT_PITCH, DEFAULT_YAW, [0, 0, 1], 0, 0, theta)
+        SNR, *_ = compute_lidar_returns(range_m, pulse_energy_J, tgt.DEFAULT_ROLL, tgt.DEFAULT_PITCH, tgt.DEFAULT_YAW, [0, 0, 1], 0, 0, theta)
 
     return range_m
 
@@ -236,12 +259,12 @@ def compute_pulse_energy(range, theta=half_beam_divergence_rad):
     pulse_energy_J = 10000000000000  # start absurdly high to guarantee SNR > min_SNR
     illum_dir = np.array([0, 0, 1])
 
-    SNR, *_ = compute_lidar_returns(range, pulse_energy_J, DEFAULT_ROLL, DEFAULT_PITCH, DEFAULT_YAW, illum_dir, 0, 0, theta)
+    SNR, *_ = compute_lidar_returns(range, pulse_energy_J, tgt.DEFAULT_ROLL, tgt.DEFAULT_PITCH, tgt.DEFAULT_YAW, illum_dir, 0, 0, theta)
 
     while SNR > min_SNR:
         dE             = pulse_energy_J * 0.005
         pulse_energy_J -= dE
-        SNR, *_        = compute_lidar_returns(range, pulse_energy_J, DEFAULT_ROLL, DEFAULT_PITCH, DEFAULT_YAW, illum_dir, 0, 0, theta)
+        SNR, *_        = compute_lidar_returns(range, pulse_energy_J, tgt.DEFAULT_ROLL, tgt.DEFAULT_PITCH, tgt.DEFAULT_YAW, illum_dir, 0, 0, theta)
 
     return pulse_energy_J
 
@@ -299,9 +322,12 @@ def monte_carlo_SNR(max_range = DEFAULT_RANGE_M, pulse_energy_J = pulse_energy_J
         SNR, photons_per_pulse, reflected_solar_photons_per_pulse, direct_solar_photons = compute_lidar_returns(
             range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y)
 
-        # Per-sample diffuse solar background, tracked here (not inside compute_lidar_returns,
+        # Per-sample photon counts, tracked here (not inside compute_lidar_returns,
         # which is kept side-effect free for reuse as a plugin)
-        solar_tracker.append({"solar photons": reflected_solar_photons_per_pulse - direct_solar_photons})
+        solar_tracker.append({
+            "solar photons":  reflected_solar_photons_per_pulse - direct_solar_photons,
+            "signal photons": photons_per_pulse,
+        })
 
         view_dir = [0, 0, 1]
         angle_zx, angle_zy, _ = relative_angles(view_dir, illum_dir)

@@ -29,6 +29,7 @@ import random
 import sympy as sp
 import radar_cross_section as rcs
 import radiant_flux
+import target_definition as tgt   # shared target geometry, orientation, and frame convention
 
 ## ── Default system parameters (overridden via function arguments) ──────
 # Physics constants
@@ -43,26 +44,29 @@ FoV                     = 25       # sensor field of view (deg) — used only if
 radar_aperture_diameter = 0.3      # antenna aperture diameter (m) — used only if gain is computed from the aperture
 
 # Receiver
-Pr_radar_min = 7.8e-18  # minimum detectable received power (W)
+Pr_radar_min = 7.8e-18  # minimum detectable received power (W) - from TTP
 B            = 1e6      # radar receiver bandwidth (Hz)
 
-# Target properties (default placeholder target; a caller/plugin overrides these)
-DEFAULT_TARGET_CHARACTERISTIC_LENGTH = 5         # physical size of satellite (m) — scales RCS from the reference 6U cubesat to the target
-DEFAULT_ABSORPTION = 1                           # surface solar absorptivity
-DEFAULT_EMISSIVITY = 1                           # surface thermal emissivity
-DEFAULT_AP         = 0.3 * 0.3                   # projected area for solar absorption (m^2)
-DEFAULT_AR         = 0.3 * 0.3                   # radiating area (m^2)
-DEFAULT_AVG_POWER  = 10                          # average spacecraft bus power dissipated as heat (W)
+# Radar thermal (radome) properties — these set the RECEIVER's own equilibrium
+# temperature (and hence the thermal noise floor), NOT the target. Target geometry
+# is shared via target_definition.py and only enters through the RCS scaling below.
+DEFAULT_RADOME_ABSORPTIVITY   = 1          # radome surface solar absorptivity
+DEFAULT_RADOME_EMISSIVITY     = 1          # radome surface thermal emissivity
+DEFAULT_RADOME_PROJECTED_AREA = 0.3 * 0.3  # sun-facing area absorbing incident flux (m^2)
+DEFAULT_RADOME_RADIATING_AREA = 0.3 * 0.3  # area radiating heat to space (m^2)
+DEFAULT_BUS_POWER             = 10         # spacecraft bus power dissipated as heat into the radome (W)
 
 min_SNR = 0.3  # minimum SNR to count as a valid detection - arbitary value - useful for tuning against a datasheet
 
 
 # Settable system parameters; configure() validates keyword names against this set.
+# Target geometry is shared; configure it via target_definition.configure().
 _CONFIG_KEYS = {
     "Pt_radar", "radar_gain", "lambda_radar", "FoV", "radar_aperture_diameter",
     "Pr_radar_min", "B",
-    "DEFAULT_TARGET_CHARACTERISTIC_LENGTH", "DEFAULT_ABSORPTION", "DEFAULT_EMISSIVITY",
-    "DEFAULT_AP", "DEFAULT_AR", "DEFAULT_AVG_POWER", "min_SNR",
+    "DEFAULT_RADOME_ABSORPTIVITY", "DEFAULT_RADOME_EMISSIVITY",
+    "DEFAULT_RADOME_PROJECTED_AREA", "DEFAULT_RADOME_RADIATING_AREA",
+    "DEFAULT_BUS_POWER", "min_SNR",
 }
 
 
@@ -152,6 +156,26 @@ def compute_missing_radar(**kwargs):
     return float(sol_real_positive[0])
 
 
+# Named sensor presets — apply with configure_preset(name) or configure(**PRESETS[name]).
+# Defined after the core so the gain can be derived via Gain_Approx.
+PRESETS = {
+    # TTP Phase B radar baseline; gain derived from the 25 deg FoV and 0.3 m aperture
+    "TTP Phase B": {
+        "Pt_radar":                500,                              # peak transmit power (W)
+        "FoV":                     25,                               # field of view (deg)
+        "radar_aperture_diameter": 0.3,                             # antenna aperture diameter (m)
+        "radar_gain":              Gain_Approx(25, lambda_radar, 0.3),  # gain from beamwidth, clamped to the aperture limit
+    },
+}
+
+
+def configure_preset(name):
+    """Apply a named sensor preset from PRESETS via configure()."""
+    if name not in PRESETS:
+        raise KeyError(f"Unknown preset {name!r}; available: {sorted(PRESETS)}")
+    return configure(**PRESETS[name])
+
+
 # ══ Simulation ═════════════════════════════════════════════════════════
 def get_pointing_from_azimuth(azimuth_deg):
     """Map a spacecraft azimuth angle to one of four orbital quadrants.
@@ -178,12 +202,14 @@ def compute_radar_returns(orientation_deg, R, pointing, case, beta):
 
       Pr      : received power from the monostatic radar equation (W).
       P_noise : Johnson-Nyquist thermal noise floor k*T*B (W), where T is the
-                target equilibrium temperature from the radiant flux environment
-                via Stefan-Boltzmann: T = ((S*alpha*Ap + P_bus) / (eps*Ar*sigma))^0.25.
+                radome (receiver) equilibrium temperature from the radiant flux
+                environment via Stefan-Boltzmann:
+                T = ((S*alpha*Ap + P_bus) / (eps*Ar*sigma))^0.25.
       SNR     : Pr / P_noise, or 0 below the detection floor.
     """
-    # RCS scaled from the table's 6U cubesat reference area to the target area
-    target_rcs = rcs.get_rcs_m2(orientation_deg) * DEFAULT_TARGET_CHARACTERISTIC_LENGTH ** 2 / (0.3 * 0.2)
+    # Target size comes from the shared target definition; RCS is scaled from the
+    # table's 6U cubesat reference area (0.3 x 0.2 m) to the target area.
+    target_rcs = rcs.get_rcs_m2(orientation_deg) * tgt.characteristic_length() ** 2 / (0.3 * 0.2)
 
     # Monostatic radar equation for received power
     Pr = radar_received_power(Pt_radar, radar_gain, lambda_radar, target_rcs, R)
@@ -191,8 +217,9 @@ def compute_radar_returns(orientation_deg, R, pointing, case, beta):
     # Total incident radiant flux (W/m^2) for this orbital geometry
     S = radiant_flux.get_radiant_flux(case, 500, pointing, beta)
 
-    # Equilibrium temperature from power balance: absorbed flux + bus power = radiated flux
-    T       = ((S * DEFAULT_ABSORPTION * DEFAULT_AP + DEFAULT_AVG_POWER) / (DEFAULT_EMISSIVITY * DEFAULT_AR * sb)) ** 0.25
+    # Radome equilibrium temperature from power balance: absorbed flux + bus power = radiated flux
+    T       = ((S * DEFAULT_RADOME_ABSORPTIVITY * DEFAULT_RADOME_PROJECTED_AREA + DEFAULT_BUS_POWER)
+               / (DEFAULT_RADOME_EMISSIVITY * DEFAULT_RADOME_RADIATING_AREA * sb)) ** 0.25
     P_noise = k * T * B
 
     SNR = Pr / P_noise if Pr >= Pr_radar_min else 0  # below minimum detectable signal → no detection

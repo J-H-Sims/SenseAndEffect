@@ -24,6 +24,10 @@ flowchart TB
     GB  -- import as Gbeam  --> LP
     CSM -- import as solar  --> LP
 
+    TGT[target_definition.py]
+    TGT -- import as tgt --> LP
+    TGT -- import as tgt --> RP
+
     subgraph radar[Radar chain]
         RCS[radar_cross_section.py]
         RF[radiant_flux.py]
@@ -62,13 +66,14 @@ Four scripts are meant to be run directly, plus two modules that double as runna
 |------|------|--------------------|-------------|---------------|------------------------|
 | `lidar_params.json` | Fitted BRDF coefficients (kd, kr, beta) per material | — | CuboidLiDARModel, CuboidSolarModel | — | data file |
 | `SurfaceParameterFitting.py` | Fit BRDF to measured data, write the JSON | — | — | numpy, scipy, pandas, matplotlib | runs fit, shows plot, **writes JSON** |
+| `target_definition.py` | Shared target geometry, orientation, and coordinate frame for both sensors | — | LiDAR_Performance, Radar_Performance | numpy | none (pure defs) |
 | `GaussianBeam.py` | Gaussian beam radius and irradiance vs range | — | LiDAR_Performance | numpy, matplotlib | none (pure defs) |
 | `CuboidLiDARModel.py` | Monostatic LiDAR return off a cuboid | — | LiDAR_Performance | numpy, json | **opens JSON at import** |
 | `CuboidSolarModel.py` | Bistatic solar reflection off a cuboid | — | LiDAR_Performance | numpy, json, matplotlib | **opens JSON at import** |
-| `LiDAR_Performance.py` | Full LiDAR SNR model + Monte Carlo | CuboidLiDARModel, GaussianBeam, CuboidSolarModel | Multimodal Ranges | numpy, scipy, matplotlib | none past its imports |
+| `LiDAR_Performance.py` | Full LiDAR SNR model + Monte Carlo | CuboidLiDARModel, GaussianBeam, CuboidSolarModel, target_definition | Multimodal Ranges | numpy, scipy, matplotlib | none past its imports |
 | `radar_cross_section.py` | RCS lookup table, dBsm to m^2, interpolation | — | Radar_Performance | (none) | none |
 | `radiant_flux.py` | Orbital radiant flux lookup table | — | Radar_Performance | (none) | none |
-| `Radar_Performance.py` | Radar range equation numeric core + symbolic solver + gain approx, plus radar SNR Monte Carlo with thermal noise floor | radar_cross_section, radiant_flux | Multimodal Ranges | numpy, scipy, sympy, matplotlib | defines sympy symbols |
+| `Radar_Performance.py` | Radar range equation numeric core + symbolic solver + gain approx, plus radar SNR Monte Carlo with thermal noise floor | radar_cross_section, radiant_flux, target_definition | Multimodal Ranges | numpy, scipy, sympy, matplotlib | defines sympy symbols |
 | `RangePrecisionFromCamera.py` | Camera range precision from subtended pixels | — | — | numpy, matplotlib | runs calc, shows plot |
 | `Multimodal Ranges.py` | Cross modality FoV trade study | Radar_Performance, LiDAR_Performance | — | numpy, matplotlib | runs study, shows plot |
 
@@ -76,7 +81,7 @@ Four scripts are meant to be run directly, plus two modules that double as runna
 
 **LiDAR signal path.** `SurfaceParameterFitting` fits measured reflectance and writes `lidar_params.json`. At run time `GaussianBeam` gives the beam irradiance at the target, `CuboidLiDARModel` turns that into a BRDF weighted return using the JSON coefficients, and `CuboidSolarModel` supplies the solar background. `LiDAR_Performance` combines all three into photons per pulse, an SNR, and a Monte Carlo over orientation, range, and sun direction.
 
-**Radar path.** `radar_cross_section` provides the target RCS at a given aspect and `radiant_flux` provides the orbital thermal environment used to derive the receiver noise temperature. The radar range equation itself lives once in `Radar_Performance` (`radar_received_power` / `radar_solve_transmit_power`); `Radar_Sim` calls the forward form per Monte Carlo sample, and `Multimodal Ranges` calls the inverse to solve for transmit power.
+**Radar path.** `radar_cross_section` provides the target RCS at a given aspect and `radiant_flux` provides the orbital thermal environment used to derive the receiver noise temperature. The radar range equation itself lives once in `Radar_Performance` (`radar_received_power` / `radar_solve_transmit_power`); its own Monte Carlo calls the forward form per sample, and `Multimodal Ranges` calls the inverse to solve for transmit power. Target geometry for both sensors comes from the shared `target_definition`.
 
 **Camera path.** `RangePrecisionFromCamera` stands alone: target width plus angular resolution gives subtended pixels, and a blur term gives the resulting range uncertainty.
 
