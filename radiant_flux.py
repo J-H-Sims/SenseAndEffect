@@ -15,7 +15,7 @@ indicate conditions where that flux component does not apply (e.g. zenith face
 receives no direct albedo). get_radiant_flux returns the total flux by summing
 all non-None components.
 
-Source: SMAD page 688
+Source: SMAD page 688 
 """
 
 

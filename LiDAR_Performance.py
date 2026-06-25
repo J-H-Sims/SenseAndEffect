@@ -67,6 +67,39 @@ DEFAULT_FACE_MATERIALS = ["Lambertian 20%"] * 6 # drawn from the material parame
 DEFAULT_RANGE_M = 10000 #m
 
 
+# Settable system parameters; configure() validates keyword names against this set.
+# Derived globals (exposure_time, aperture_area_m2) are recomputed, not set directly.
+_CONFIG_KEYS = {
+    "range_resolution", "wavelength_nm", "pulse_energy_J", "half_beam_divergence_rad",
+    "beam_waist", "aperture_radius", "bandwidth", "polarity_filter",
+    "SOLAR_SPECTRAL_IRRADIANCE_W_M2_NM", "min_photons_to_detect", "min_SNR",
+    "DEFAULT_LENGTH", "DEFAULT_WIDTH", "DEFAULT_HEIGHT",
+    "DEFAULT_ROLL", "DEFAULT_PITCH", "DEFAULT_YAW",
+    "DEFAULT_FACE_MATERIALS", "DEFAULT_RANGE_M",
+}
+
+
+def configure(**overrides):
+    """Set LiDAR system parameters globally at sim initialisation.
+
+    Pass any of the settable module globals (see _CONFIG_KEYS) as keywords;
+    unknown names raise KeyError. Derived quantities are recomputed afterwards:
+    aperture_area_m2 from aperture_radius, exposure_time from range_resolution.
+    Returns the resulting configuration as a dict for logging.
+    """
+    unknown = set(overrides) - _CONFIG_KEYS
+    if unknown:
+        raise KeyError(f"Unknown LiDAR parameter(s): {sorted(unknown)}")
+    globals().update(overrides)
+
+    # Recompute derived globals from their source parameters
+    global aperture_area_m2, exposure_time
+    aperture_area_m2 = np.pi * (aperture_radius ** 2)
+    exposure_time    = range_resolution / SPEED_OF_LIGHT
+
+    return {key: globals()[key] for key in _CONFIG_KEYS}
+
+
 def compute_photons_p_pulse(X=0, Y=0, z=DEFAULT_RANGE_M, w0=0.001, wavelength=wavelength_nm, P_total=0.001, theta_user=0,
                              length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT,
                              roll=DEFAULT_ROLL, pitch=DEFAULT_PITCH, yaw=DEFAULT_YAW, face_materials=DEFAULT_FACE_MATERIALS):
@@ -141,20 +174,27 @@ def compute_solar_photons(range_m, length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, h
     return solar_photons, direct_solar_photons
 
 
-def compute_lidar_returns(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y, theta=half_beam_divergence_rad,
-                          length=DEFAULT_LENGTH, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT,
-                          face_materials=DEFAULT_FACE_MATERIALS):
+def compute_lidar_returns(range_m, pulse_energy_J, roll, pitch, yaw, illum_dir, X, Y, theta=None,
+                          length=None, width=None, height=None, face_materials=None):
     """Return (SNR, photons_per_pulse, reflected_solar_photons_per_pulse, direct_solar_photons).
 
-    Target geometry (length, width, height, face_materials) is taken as input,
-    defaulting to the module DEFAULT_* globals, so the caller (e.g. a spacecraft
-    sim) can pass the actual target instead of the placeholder. Pure and free of
-    side effects — the per-sample solar bookkeeping is the caller's responsibility.
+    Target geometry (length, width, height, face_materials) and theta are taken as
+    input; any left as None resolve to the module DEFAULT_* / half_beam_divergence_rad
+    globals at call time, so values set via configure() at sim init are honoured and
+    a caller (e.g. a spacecraft sim) can still pass the actual target explicitly.
+    Pure and free of side effects — the per-sample solar bookkeeping is the caller's
+    responsibility.
 
     SNR is forced to zero if total detected photons fall below min_photons_to_detect.
     The photon threshold guards against detections with too few photons to be
     statistically reliable regardless of the signal-to-background ratio.
     """
+    if theta is None:          theta = half_beam_divergence_rad
+    if length is None:         length = DEFAULT_LENGTH
+    if width is None:          width = DEFAULT_WIDTH
+    if height is None:         height = DEFAULT_HEIGHT
+    if face_materials is None: face_materials = DEFAULT_FACE_MATERIALS
+
     reflected_solar_photons_per_pulse, direct_solar_photons = compute_solar_photons(
         range_m, length, width, height, roll, pitch, yaw, face_materials, illum_dir, [0, 0, 1], wavelength_nm)
     photons_per_pulse = compute_photons_p_pulse(

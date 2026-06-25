@@ -57,6 +57,30 @@ DEFAULT_AVG_POWER  = 10                          # average spacecraft bus power 
 min_SNR = 0.3  # minimum SNR to count as a valid detection - arbitary value - useful for tuning against a datasheet
 
 
+# Settable system parameters; configure() validates keyword names against this set.
+_CONFIG_KEYS = {
+    "Pt_radar", "radar_gain", "lambda_radar", "FoV", "radar_aperture_diameter",
+    "Pr_radar_min", "B",
+    "DEFAULT_TARGET_CHARACTERISTIC_LENGTH", "DEFAULT_ABSORPTION", "DEFAULT_EMISSIVITY",
+    "DEFAULT_AP", "DEFAULT_AR", "DEFAULT_AVG_POWER", "min_SNR",
+}
+
+
+def configure(**overrides):
+    """Set radar system parameters globally at sim initialisation.
+
+    Pass any of the settable module globals (see _CONFIG_KEYS) as keywords;
+    unknown names raise KeyError. compute_radar_returns reads all configuration as
+    globals at call time, so the new values take effect immediately. Returns the
+    resulting configuration as a dict for logging.
+    """
+    unknown = set(overrides) - _CONFIG_KEYS
+    if unknown:
+        raise KeyError(f"Unknown radar parameter(s): {sorted(unknown)}")
+    globals().update(overrides)
+    return {key: globals()[key] for key in _CONFIG_KEYS}
+
+
 # ══ Range equation core (reusable, no simulation state) ════════════════
 def Gain_Approx(Beamwidth, lamda_radar, aperture_diameter):
     """Estimate antenna gain from beamwidth, clamped to the diffraction-limited minimum.
